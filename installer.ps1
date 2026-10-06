@@ -1,3 +1,10 @@
+﻿# boSS Tools - WPF-лаунчер (розовая матовая тема)
+# Kind='Script'   - качает .ps1 в papa\scripts и запускает файл в окне powershell (-File)
+# Kind='Inline'   - локальная команда: сохраняется в papa\scripts и запускается оттуда же
+# Kind='Download' - качает файлы по прямым ссылкам в $ToolsRoot и открывает папку
+# Kind='Link'     - просто открывает ссылку в браузере
+#
+# Свои инструменты добавлять в массив $Tools, вкладки - в $Categories
 
 function Test-IsAdministrator {
     $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -34,6 +41,8 @@ Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
+# всё качается на рабочий стол в папку papa
+# GetFolderPath понимает перенесённый рабочий стол (OneDrive), $env:USERPROFILE - нет
 $DesktopRoot = [Environment]::GetFolderPath('Desktop')
 if ([string]::IsNullOrWhiteSpace($DesktopRoot) -or -not (Test-Path -LiteralPath $DesktopRoot)) {
     $DesktopRoot = Join-Path $env:USERPROFILE 'Desktop'
@@ -311,7 +320,7 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
             <Border Background="{StaticResource BrushPanel}" BorderBrush="{StaticResource BrushBorder}"
                     BorderThickness="1" CornerRadius="6">
                 <Grid>
-                    <TextBlock x:Name="TxtPlaceholder" Text="пиши правильно чурка"
+                    <TextBlock x:Name="TxtPlaceholder" Text="Поиск по названию и описанию"
                                Foreground="{StaticResource BrushMuted}" FontSize="13"
                                HorizontalAlignment="Center" VerticalAlignment="Center"
                                IsHitTestVisible="False"/>
@@ -389,22 +398,68 @@ $BtnClose        = $Window.FindName('BtnClose')
 
 # ---------- логика запуска ----------
 
+# Скрипты и команды запускаются как обычный `powershell -File <файл.ps1>`.
+# Раньше было iex(irm URL) + base64 -EncodedCommand через cmd /k: в журналы
+# (4104, 4688, Sysmon) попадали нечитаемая base64-строка и код чужого скрипта
+# как "анонимный блок из строки", что выглядит как обфускация и забивает логи.
+# Теперь командная строка короткая и читаемая, а у каждого запуска есть файл
+# в papa\scripts - его можно открыть, сверить хеш и показать проверяемому.
+
+# имя файла из названия инструмента: только буквы, цифры, '-', '_' и '.'
+function Get-SafeFileName {
+    param([string]$Name)
+    $safe = ($Name -replace '[^\w\.\-]+', '_').Trim('_')
+    if ([string]::IsNullOrWhiteSpace($safe)) { $safe = 'tool' }
+    return $safe
+}
+
+# папка для скачанных скриптов и локальных команд (та же, что у категории scripts)
+function Get-ScriptFolder {
+    $dir = Join-Path $ToolsRoot 'scripts'
+    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+    return $dir
+}
+
+# окно powershell, которое остаётся открытым после выполнения (-NoExit).
+# Лаунчер и так работает от админа, поэтому повторный UAC нужен, только если это не так
+function Start-ToolWindow {
+    param([string]$ScriptPath)
+    $params = @{
+        FilePath     = 'powershell.exe'
+        ArgumentList = ('-NoProfile -ExecutionPolicy Bypass -NoExit -File "{0}"' -f $ScriptPath)
+    }
+    if (-not (Test-IsAdministrator)) { $params.Verb = 'RunAs' }
+    Start-Process @params
+}
+
+# качает скрипт в papa\scripts и запускает с диска. Возвращает короткий SHA256 для статусбара
 function Invoke-RemoteScript {
-    param([string]$Url)
-    $inner = "try { iex (irm '$Url') } catch { Write-Host `$_ -ForegroundColor Red }; Write-Host ''; Write-Host 'Не закрывай окно - весь вывод потеряется' -ForegroundColor Magenta; while (`$true) { Start-Sleep 3600 }"
-
-    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($inner))
-    Start-Process cmd.exe -Verb RunAs -ArgumentList "/k powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded"
+    param([string]$Name, [string]$Url)
+    $path = Join-Path (Get-ScriptFolder) ((Get-SafeFileName $Name) + '.ps1')
+    $client = New-Object System.Net.WebClient
+    try {
+        $client.Headers.Add('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
+        $bytes = $client.DownloadData($Url)
+    } finally { $client.Dispose() }
+    $text = [Text.Encoding]::UTF8.GetString($bytes).TrimStart([char]0xFEFF)
+    if ([string]::IsNullOrWhiteSpace($text)) { throw 'сервер вернул пустой файл' }
+    # UTF-8 с BOM: иначе PowerShell 5.1 читает кириллицу в скрипте как ANSI
+    [System.IO.File]::WriteAllText($path, $text, (New-Object System.Text.UTF8Encoding($true)))
+    $sha = [System.Security.Cryptography.SHA256]::Create()
+    try { $hash = -join ($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString('x2') }) } finally { $sha.Dispose() }
+    Start-ToolWindow -ScriptPath $path
+    return $hash.Substring(0, 12)
 }
 
+# локальная команда: кладётся в читаемый .ps1 и запускается из него
 function Invoke-InlineCommand {
-    param([string]$Command)
-    $inner = "$Command; Write-Host ''; Write-Host 'Не закрывай окно - весь вывод потеряется' -ForegroundColor Magenta; while (`$true) { Start-Sleep 3600 }"
-
-    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($inner))
-    Start-Process powershell.exe -Verb RunAs -ArgumentList @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $encoded)
+    param([string]$Name, [string]$Command)
+    $path = Join-Path (Get-ScriptFolder) ((Get-SafeFileName $Name) + '.ps1')
+    [System.IO.File]::WriteAllText($path, $Command, (New-Object System.Text.UTF8Encoding($true)))
+    Start-ToolWindow -ScriptPath $path
 }
 
+# пишет в строку состояния и сразу перерисовывает окно, чтобы оно не выглядело зависшим
 function Set-Status {
     param([string]$Text, [switch]$Error)
     $StatusText.Text = $Text
@@ -412,7 +467,7 @@ function Set-Status {
     $Window.Dispatcher.Invoke([Action]{}, [Windows.Threading.DispatcherPriority]::Render) | Out-Null
 }
 
-
+# папка, куда падает инструмент
 function Get-ToolFolder {
     param($Tool)
     $dest = Join-Path $ToolsRoot $Tool.Category
@@ -420,7 +475,7 @@ function Get-ToolFolder {
     return $dest
 }
 
-
+# имя файла из ссылки, без хвоста ?query
 function Get-LinkFileName {
     param([string]$Url)
     $name = [System.IO.Path]::GetFileName(([uri]$Url).LocalPath)
@@ -428,7 +483,7 @@ function Get-LinkFileName {
     return $name
 }
 
-
+# качает один файл: WebClient быстрее Invoke-WebRequest, User-Agent нужен NirSoft и паре зеркал
 function Get-RemoteFile {
     param([string]$Url, [string]$Path)
     $client = New-Object System.Net.WebClient
@@ -438,7 +493,7 @@ function Get-RemoteFile {
     } finally { $client.Dispose() }
 }
 
-
+# скачан ли уже инструмент
 function Test-ToolDownloaded {
     param($Tool)
     if ($Tool.Kind -ne 'Download') { return $false }
@@ -449,6 +504,7 @@ function Test-ToolDownloaded {
     return $true
 }
 
+# качает все ссылки инструмента, zip сразу распаковывает рядом. Возвращает $true при успехе.
 function Invoke-ToolDownload {
     param($Tool, [switch]$Quiet)
     $dest = Get-ToolFolder -Tool $Tool
@@ -482,13 +538,15 @@ function Invoke-ToolDownload {
     return $true
 }
 
-
+# качает всю текущую категорию одной кнопкой
+# единственное место, где решается "что сейчас на экране".
+# и список карточек, и кнопка "скачать всё" берут набор отсюда - иначе качается не то, что видишь
 function Get-VisibleTools {
     param([string]$CategoryKey, [string]$Filter)
     if ([string]::IsNullOrWhiteSpace($Filter)) {
         return @($Tools | Where-Object { $_.Category -eq $CategoryKey })
     }
-
+    # с текстом в поиске категория игнорируется - ищем везде, по названию и описанию
     return @($Tools | Where-Object { $_.Name -like "*$Filter*" -or $_.Description -like "*$Filter*" })
 }
 
@@ -502,7 +560,7 @@ function Invoke-CategoryDownload {
         if (Invoke-ToolDownload -Tool $tool -Quiet) { $ok++ } else { $bad++; Start-Sleep -Milliseconds 800 }
     }
     $BtnDownloadAll.IsEnabled = $true
-
+    # при поиске по всем категориям файлы падают в разные папки - открываем корень
     $folder = if ([string]::IsNullOrWhiteSpace($Filter)) { Join-Path $ToolsRoot $CategoryKey } else { $ToolsRoot }
     if (Test-Path -LiteralPath $folder) { Start-Process explorer.exe $folder }
     Update-ToolList -CategoryKey $CategoryKey -Filter $Filter -KeepStatus
@@ -533,7 +591,8 @@ $Tools = @(
     @{ Name='Y-AmCache';  Description='Парсер AmCache';                   Category='ytools'; Kind='Download'; Links=@('https://github.com/sweetvata/Y-AmCache/releases/download/v.1.0.0/Y-AmCache.exe') }
     @{ Name='Y-Jdamp';    Description='Дампер';                           Category='ytools'; Kind='Download'; Links=@('https://github.com/sweetvata/Y-Jdamp/releases/download/v1.0.0/Y-Jdamp.exe') }
     @{ Name='Y-Alts';     Description='Чекер альт-аккаунтов';             Category='ytools'; Kind='Download'; Links=@('https://github.com/sweetvata/Y-Alts/releases/download/v1.0/Y-Alts.exe') }
-    
+    # Y-BOssTools (InjGen++) убран 11.08.2026: файл удалён из репозитория
+    # sweetvata/Y-BOssTools коммитом f004ba3, релизов там нет, качать нечего
 
     # ---------- OrbDiff ----------
     @{ Name='Prefetch View++';     Description='Парсит prefetch, вытаскивает инфу о файлах'; Category='orbdiff'; Kind='Download'; Links=@('https://github.com/Orbdiff/PrefetchView/releases/download/v1.6.7/pv++.exe') }
@@ -571,6 +630,7 @@ $Tools = @(
     @{ Name='Meow Novoware Fucker'; Description='Детект артефактов Novoware';           Category='tonynoh'; Kind='Link';     Url='https://github.com/MeowTonynoh/MeowNovowareFucker/releases/latest' }
 
     # ---------- RedLotus ----------
+    # у всех троих релиз без прямой ссылки на файл, поэтому Link, а не Download
     @{ Name='RL ModAnalyzer';   Description='Анализ модов на признаки читов';        Category='redlotus'; Kind='Link'; Url='https://github.com/ItzIceHere/RedLotus-Mod-Analyzer/releases/latest' }
     @{ Name='RL TaskSentinel';  Description='Слежение за задачами планировщика';      Category='redlotus'; Kind='Link'; Url='https://github.com/ItzIceHere/RedLotus-Task-Sentinel/releases/latest' }
     @{ Name='RL AltChecker';    Description='Проверка на альт-аккаунты';              Category='redlotus'; Kind='Link'; Url='https://github.com/ItzIceHere/RedLotusAltChecker/releases/latest' }
@@ -594,12 +654,14 @@ $Tools = @(
     @{ Name='Win Prefetch View++';      Description='Prefetch с детектом байпасов и YARA';         Category='detectac'; Kind='Download'; Links=@('https://github.com/detect-ac/Detect.ac-Free-Tools/releases/download/FreeTools/WinPrefetchView++.exe') }
 
     # ---------- Vortex ----------
+    # dot-sys, он же автор PC-Check. Сайт: vortexforensic.com
     @{ Name='Vortex Prefetch';   Description='Парсер prefetch Win10/11 с глубоким разбором';        Category='vortex'; Kind='Download'; Links=@('https://github.com/dot-sys/VortexPrefetch/releases/download/v1.1/VortexPrefetch.exe') }
     @{ Name='Vortex MFT Plus';   Description='NTFS: MFT, USN Journal, $LogFile, $I30 и $ObjId';     Category='vortex'; Kind='Download'; Links=@('https://github.com/dot-sys/VortexMFTPlus/releases/download/v1.0/VortexMFTPlus.exe') }
     @{ Name='Vortex AmCache';    Description='Живой парсер и анализатор куста AmCache';             Category='vortex'; Kind='Download'; Links=@('https://github.com/dot-sys/VortexAmCache/releases/download/v1.0/VortexAmCache.exe') }
     @{ Name='Vortex PCA';        Description='Разбор локального PCA в Win11 с метаданными';         Category='vortex'; Kind='Download'; Links=@('https://github.com/dot-sys/VortexPCA/releases/download/v1.0/VortexPCA.exe') }
     @{ Name='Vortex FAT';        Description='Парсер FAT16/32 и exFAT, поиск удалённых файлов';     Category='vortex'; Kind='Download'; Links=@('https://github.com/dot-sys/VortexFAT/releases/download/v1.2/VortexFAT.exe') }
     @{ Name='Vortex Viewer';     Description='Триаж живой системы: журнал, таймлайн, строки памяти'; Category='vortex'; Kind='Download'; Links=@('https://github.com/dot-sys/VortexViewer/releases/download/v1.2/VortexViewer.exe') }
+    # веб-инструмент, релизов нет - открывается в браузере
     @{ Name='Vortex CSRSS Tool'; Description='Визуализация сырых строк CSRSS, работает в браузере';  Category='vortex'; Kind='Link';     Url='https://vortexforensic.com/webtools/CSRSSTool.html' }
 
     # ---------- Scripts: свои ----------
@@ -607,11 +669,26 @@ $Tools = @(
     @{ Name='RedLotus BAM';         Description='Разбор BAM от PureIntent';                 Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/PureIntent/ScreenShare/main/RedLotusBam.ps1' }
     @{ Name='Y-ClipBoard';          Description='Просмотр истории буфера обмена';           Category='scripts'; Kind='Script'; Url='https://github.com/sweetvata/Y-ClipBoard/releases/download/Y-ClipBoard_1.0/Y-ClipBoard.ps1' }
     @{ Name='Y-SysInfo';            Description='Сбор информации о системе';                Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/sweetvata/Y-sysinfo/main/check.ps1' }
+    # сам складывает выгрузку в Рабочий стол\papa - совпадает с $ToolsRoot
     @{ Name='Y-PSOperational';      Description='Разбор событий 4104 из журнала PowerShell/Operational'; Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/sweetvata/Y-PSOperational/main/hunt-ps4104.ps1' }
     @{ Name='LOLBAS Bypass Killer'; Description='Детект LOLBAS-байпасов';                   Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/allahbypasses/main/refs/heads/main/lolbasbypasskillerminecraft2016.ps1' }
+    # ВНИМАНИЕ: PC-Check качает себя в C:\Temp и добавляет C:\Temp\Dump в исключения Defender
     @{ Name='PC-Check';             Description='PC-Check от dot-sys, качается в C:\Temp и запускается'; Category='scripts'; Kind='Inline'; Command='New-Item -Path "C:\Temp" -ItemType Directory -Force | Out-Null; Set-Location "C:\temp"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/dot-sys/PC-Check/master/PCCheck.ps1" -OutFile "PC-Check.ps1"; Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force; Add-MpPreference -ExclusionPath ''C:\Temp\Dump'' | Out-Null; .\PC-Check.ps1' }
-
-    @{ Name='PC-Check v2 (авто)';   Description='PCCheckv2 от dot-sys, полный дамп без меню; трогает Defender и ExecutionPolicy'; Category='scripts'; Kind='Inline'; Command='$ErrorActionPreference=''SilentlyContinue''; New-Item -Path ''C:\Temp\Scripts'',''C:\Temp\Dump'' -ItemType Directory -Force | Out-Null; Get-ChildItem ''C:\Temp\Dump'' | Remove-Item -Recurse -Force; Get-ChildItem ''C:\Temp\Scripts'' -File | Remove-Item -Force; $b=''https://raw.githubusercontent.com/dot-sys/PCCheckv2/main/''; foreach($f in ''PCCheck.ps1'',''MFT.ps1'',''Registry.ps1'',''SystemLogs.ps1'',''ProcDump.ps1'',''Localhost.ps1'',''Viewer.html''){ Invoke-WebRequest -Uri ($b+$f) -OutFile (''C:\Temp\Scripts\''+$f) }; Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force; Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy RemoteSigned -Force; Add-MpPreference -ExclusionPath ''C:\Temp'' | Out-Null; function global:Read-Host { param([Parameter(ValueFromRemainingArguments=$true)]$a) ''Y'' }; & ''C:\Temp\Scripts\PCCheck.ps1''' }
+    # PCCheckv2 без меню - повторяет то, что делает пункт "Full Check" в Menu.ps1:
+    # качает те же 7 файлов и запускает PCCheck.ps1 напрямую.
+    # Полный или быстрый режим PCCheck выбирает сам по наличию QuickMFT.ps1 на диске -
+    # качаем MFT.ps1 и не качаем QuickMFT.ps1, значит полный.
+    # Read-Host подменяется на заглушку с 'Y': PCCheck спрашивает согласие в начале
+    # и "открыть отчёт?" в конце, оба ответа нужны утвердительные.
+    # ValueFromRemainingArguments обязателен - первый вопрос зовётся с двумя
+    # позиционными аргументами, обычный param($p) на этом падает.
+    # Menu.ps1 намеренно не качаем: последней строкой PCCheck.ps1 вызывает его обратно,
+    # а с подменённым Read-Host меню зациклится на "Invalid option".
+    # ВНИМАНИЕ: добавляет весь C:\Temp в исключения Defender и на время работы ставит
+    # ExecutionPolicy машины в RemoteSigned (PCCheck сам запускает powershell -File без
+    # Bypass, без этого его дочерние скрипты не стартуют). Исключение PCCheck снимает сам
+    # в конце, политика возвращается на прежнюю в finally.
+    @{ Name='PC-Check v2 (авто)';   Description='PCCheckv2 от dot-sys, полный дамп без меню; трогает Defender и ExecutionPolicy'; Category='scripts'; Kind='Inline'; Command='$ErrorActionPreference=''SilentlyContinue''; New-Item -Path ''C:\Temp\Scripts'',''C:\Temp\Dump'' -ItemType Directory -Force | Out-Null; Get-ChildItem ''C:\Temp\Dump'' | Remove-Item -Recurse -Force; Get-ChildItem ''C:\Temp\Scripts'' -File | Remove-Item -Force; $b=''https://raw.githubusercontent.com/dot-sys/PCCheckv2/main/''; foreach($f in ''PCCheck.ps1'',''MFT.ps1'',''Registry.ps1'',''SystemLogs.ps1'',''ProcDump.ps1'',''Localhost.ps1'',''Viewer.html''){ Invoke-WebRequest -Uri ($b+$f) -OutFile (''C:\Temp\Scripts\''+$f) }; Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force; $oldEP=Get-ExecutionPolicy -Scope LocalMachine; Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy RemoteSigned -Force; Add-MpPreference -ExclusionPath ''C:\Temp'' | Out-Null; function global:Read-Host { param([Parameter(ValueFromRemainingArguments=$true)]$a) ''Y'' }; try { & ''C:\Temp\Scripts\PCCheck.ps1'' } finally { Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy $oldEP -Force }' }
     @{ Name='CSRSS Signature Check';Description='Проверка подписей CSRSS от dot-sys';  Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/dot-sys/CSRSS-Signature-Check/main/csrss.ps1' }
     @{ Name='Recording Check';      Description='Следы программ записи экрана';        Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/dot-sys/Recording-Check/main/Recording-Check.ps1' }
     @{ Name='Метрики интерфейсов';  Description='IPv4-интерфейсы по метрике - ищем хотспот'; Category='scripts'; Kind='Inline'; Command='Get-NetIPInterface | Where-Object {$_.AddressFamily -eq ''IPv4'' -and $_.InterfaceMetric -ne ''0''} | Sort-Object -Property InterfaceMetric | Format-Table -Property InterfaceIndex, InterfaceAlias, AddressFamily, InterfaceMetric -AutoSize' }
@@ -623,15 +700,15 @@ $Tools = @(
     @{ Name='Zeezy Services';              Description='Проверка служб от zeezyexe';            Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/zeezyexe/services-checker/refs/heads/main/zeezyservices.psl' }
     @{ Name='Doomsday Finder';             Description='DoomsDayDetector от zedoonvm1';         Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/zedoonvm1/powershell-scripts/refs/heads/main/DoomsDayDetector.ps1' }
     @{ Name='All In One';                  Description='Комбайн для скриншера от Enr1c0o';      Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/Enr1c0o/Powershell-Scripts/refs/heads/main/All-in-one.ps1' }
-    @{ Name='Mod Analyzer';                Description='Анализ модов от p1aegg';                Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/p1aegg/powershell/refs/heads/main/modanalyzer.ps1' }
+    # Mod Analyzer от p1aegg убран: modanalyzer.ps1 удалён из репозитория (404), остался только ClassLoaderDump.ps1
     @{ Name='JAR Parser (script)';         Description='Разбор JAR-файлов';                     Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/l4rpsucks/Scripts/refs/heads/main/JARParser.ps1' }
     @{ Name='Fileless Bypass Detection';   Description='Детект fileless-байпасов';              Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/l4rpsucks/Scripts/refs/heads/main/FilelessBypassDetection.ps1' }
     @{ Name='Macro Scanner';               Description='Поиск макросов мышиного софта';         Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/zeezyexe/macro-scanner/refs/heads/main/catchmacro.ps1' }
     @{ Name='ClassLoader Dump';            Description='Дамп данных ClassLoader';               Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/p1aegg/powershell/refs/heads/main/ClassLoaderDump.ps1' }
     @{ Name='Meow Mod Analyzer';           Description='Анализ модов от MeowTonynoh';           Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/MeowTonynoh/MeowModAnalyzer/main/MeowModAnalyzer.ps1' }
     @{ Name='Prefetch Integrity Analyzer'; Description='Целостность prefetch (RedLotus)';       Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/bacanoicua/Screenshare/main/RedLotusPrefetchIntegrityAnalyzer.ps1' }
-    @{ Name='Lily Services';               Description='Проверка служб от PraiseLily';          Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/Lafferrr/SSTools/refs/heads/main/LilysServices' }
-    @{ Name='Lily Services Enabler';       Description='Включение служб';                       Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/Lafferrr/SSTools/refs/heads/main/LilysServicesEnabler' }
+    @{ Name='Lily Services';               Description='Проверка служб от PraiseLily';          Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/Lafferrr/SSTools/refs/heads/main/LilysServices.ps1' }
+    @{ Name='Lily Services Enabler';       Description='Включение служб';                       Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/Lafferrr/SSTools/refs/heads/main/LilysServicesEnabler.ps1' }
     @{ Name='DQRKIS Fucker';               Description='Проверка артефактов DQRKIS';            Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/cheesecatlol/DQRKIS-FUCKER/refs/heads/main/DqrkisFucker.ps1' }
     @{ Name='MacroDetector';               Description='Следы макросов и кликеров';             Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/NiccBlahh/MacroDetector/refs/heads/main/MacroDetector.ps1' }
 
@@ -690,6 +767,9 @@ $Tools = @(
 
 # ---------- отрисовка списка инструментов ----------
 
+# цвет и подпись бейджа по типу действия.
+# Script отдельным цветом не для красоты: он выполняет чужой код с гитхаба от админа,
+# это должно быть видно до нажатия, а не после
 $KindBadge = @{
     'Download' = @{ Text = 'СКАЧАТЬ'; Color = '#c85a82' }
     'Script'   = @{ Text = 'СКРИПТ';  Color = '#c8703a' }
@@ -719,7 +799,8 @@ function New-KindBadge {
 }
 
 function Update-ToolList {
-
+    # KeepStatus - когда список перерисовывают после скачивания: там в статусе
+    # уже лежат итоги ("скачано 7, ошибок 0"), и затирать их счётчиком не надо
     param([string]$CategoryKey, [string]$Filter, [switch]$KeepStatus)
     $ToolList.Children.Clear()
 
@@ -727,7 +808,7 @@ function Update-ToolList {
     $items = Get-VisibleTools -CategoryKey $CategoryKey -Filter $Filter
     if (-not $items) {
         $tb = New-Object System.Windows.Controls.TextBlock
-        $tb.Text = 'пиши правильно чурка'
+        $tb.Text = 'Ничего не найдено'
         $tb.Foreground = $Window.FindResource('BrushMuted')
         $ToolList.Children.Add($tb) | Out-Null
         return
@@ -739,6 +820,7 @@ function Update-ToolList {
         $card.CornerRadius = '6'
         $card.Padding = '12,10,12,10'
         $card.Margin = '0,0,0,12'
+        # фон карточки чуть темнее панели чтобы не сливались
         $cardBg = New-Object System.Windows.Media.SolidColorBrush
         $cardBg.Color = [System.Windows.Media.ColorConverter]::ConvertFromString('#3a2030')
         $card.Background = $cardBg
@@ -751,6 +833,7 @@ function Update-ToolList {
         $grid.ColumnDefinitions.Add($col1)
         $grid.ColumnDefinitions.Add($col2)
 
+        # подсветка карточки под курсором
         $card.Add_MouseEnter({ param($s, $e) $s.BorderBrush = $Window.FindResource('BrushAccent') })
         $card.Add_MouseLeave({ param($s, $e) $s.BorderBrush = $Window.FindResource('BrushBorder') })
 
@@ -758,6 +841,7 @@ function Update-ToolList {
         $textStack.VerticalAlignment = 'Center'
         $downloaded = Test-ToolDownloaded -Tool $tool
 
+        # строка с бейджем типа, именем и - только в результатах поиска - категорией
         $titleRow = New-Object System.Windows.Controls.StackPanel
         $titleRow.Orientation = 'Horizontal'
         $titleRow.Children.Add((New-KindBadge -Kind $tool.Kind)) | Out-Null
@@ -810,8 +894,25 @@ function Update-ToolList {
             param($s, $e)
             $t = $s.Tag
             switch ($t.Kind) {
-                'Script'   { Invoke-RemoteScript -Url $t.Url; Set-Status "Запущено: $($t.Name)" }
-                'Inline'   { Invoke-InlineCommand -Command $t.Command; Set-Status "Запущено: $($t.Name)" }
+                'Script'   {
+                    $s.IsEnabled = $false
+                    Set-Status "Качаю скрипт: $($t.Name)"
+                    try {
+                        $sum = Invoke-RemoteScript -Name $t.Name -Url $t.Url
+                        Set-Status "Запущено: $($t.Name) - papa\scripts, sha256 $sum..."
+                    } catch {
+                        Set-Status "Не запустилось - $($t.Name): $($_.Exception.Message)" -Error
+                    }
+                    $s.IsEnabled = $true
+                }
+                'Inline'   {
+                    try {
+                        Invoke-InlineCommand -Name $t.Name -Command $t.Command
+                        Set-Status "Запущено: $($t.Name)"
+                    } catch {
+                        Set-Status "Не запустилось - $($t.Name): $($_.Exception.Message)" -Error
+                    }
+                }
                 'Download' {
                     $s.IsEnabled = $false
                     Invoke-ToolDownload -Tool $t | Out-Null
@@ -852,7 +953,7 @@ function Set-CategoryButtonStyles {
 
 foreach ($cat in $Categories) {
     $btn = New-Object System.Windows.Controls.Button
-
+    # счётчик прямо во вкладке: с 12 категориями иначе не видно, где пусто, а где 28 штук
     $count = @($Tools | Where-Object { $_.Category -eq $cat.Key }).Count
     $inner = New-Object System.Windows.Controls.Grid
     $c1 = New-Object System.Windows.Controls.ColumnDefinition
@@ -895,7 +996,7 @@ $BtnRefresh.Add_Click({ Update-ToolList -CategoryKey $script:SelectedCategory -F
 $BtnFolder.Add_Click({ Start-Process explorer.exe $ToolsRoot })
 $BtnDownloadAll.Add_Click({ Invoke-CategoryDownload -CategoryKey $script:SelectedCategory -Filter $TxtFilter.Text })
 
-
+# кастомный заголовок: перетаскивание, минимизация, закрытие
 $TitleBar.Add_MouseLeftButtonDown({ $Window.DragMove() })
 $BtnMinimize.Add_Click({ $Window.WindowState = 'Minimized' })
 $BtnClose.Add_Click({ $Window.Close() })
