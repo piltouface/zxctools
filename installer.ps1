@@ -1,6 +1,6 @@
 ﻿# boSS Tools - WPF-лаунчер (розовая матовая тема)
-# Kind='Script'   - качает .ps1 в papa\scripts и запускает файл в окне powershell (-File)
-# Kind='Inline'   - локальная команда: сохраняется в papa\scripts и запускается оттуда же
+# Kind='Script'   - запускает удалённый .ps1 через iex(irm URL) в окне cmd от админа
+# Kind='Inline'   - локальная команда в окне powershell
 # Kind='Download' - качает файлы по прямым ссылкам в $ToolsRoot и открывает папку
 # Kind='Link'     - просто открывает ссылку в браузере
 #
@@ -36,9 +36,22 @@ if (-not (Test-IsAdministrator)) {
     if ($script:EntryPath -and (Restart-ScriptElevatedSta -Path $script:EntryPath -AsAdmin)) { exit }
 }
 
+try {
+    Add-Type -Namespace Win -Name Dpi -MemberDefinition '[DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value); [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();'
+    $dpiSet = $false
+    try { $dpiSet = [Win.Dpi]::SetProcessDpiAwarenessContext([IntPtr](-4)) } catch { }
+    if (-not $dpiSet) {
+        try { [Win.Dpi]::SetProcessDPIAware() | Out-Null } catch { }
+    }
+} catch { }
+
 Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
+
+$script:AnimEnabled = $true
+try { $script:AnimEnabled = [bool][System.Windows.SystemParameters]::ClientAreaAnimation } catch { }
+$HoverDur = if ($script:AnimEnabled) { '0:0:0.14' } else { '0:0:0' }
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 # всё качается на рабочий стол в папку papa
@@ -58,6 +71,7 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="boSS Tools" Height="640" Width="960"
         WindowStartupLocation="CenterScreen"
+        UseLayoutRounding="True" SnapsToDevicePixels="True"
         AllowsTransparency="False">
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="5" GlassFrameThickness="0" UseAeroCaptionButtons="False"/>
@@ -93,14 +107,48 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
                                     <GradientStop Color="#9a3a60" Offset="1"/>
                                 </LinearGradientBrush>
                             </Border.Background>
-                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
+                            <ContentPresenter x:Name="CP" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="Opacity" To="0.85" Duration="$HoverDur">
+                                                <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="Opacity" To="1" Duration="$HoverDur">
+                                                <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.7"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="CP" Storyboard.TargetProperty="Opacity" To="0.75" Duration="$HoverDur">
+                                                <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <DoubleAnimation Storyboard.TargetName="CP" Storyboard.TargetProperty="Opacity" To="1" Duration="$HoverDur">
+                                                <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
+                                            </DoubleAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -119,13 +167,41 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="Bd" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                            <Border.Background>
+                                <SolidColorBrush Color="#003a2030"/>
+                            </Border.Background>
+                            <Border.BorderBrush>
+                                <SolidColorBrush Color="#52304a"/>
+                            </Border.BorderBrush>
                             <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#3a2030"/>
-                                <Setter TargetName="Bd" Property="BorderBrush" Value="#c85a82"/>
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <ColorAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#3a2030" Duration="$HoverDur">
+                                                <ColorAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></ColorAnimation.EasingFunction>
+                                            </ColorAnimation>
+                                            <ColorAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)" To="#c85a82" Duration="$HoverDur">
+                                                <ColorAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></ColorAnimation.EasingFunction>
+                                            </ColorAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <ColorAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#003a2030" Duration="$HoverDur">
+                                                <ColorAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></ColorAnimation.EasingFunction>
+                                            </ColorAnimation>
+                                            <ColorAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)" To="#52304a" Duration="$HoverDur">
+                                                <ColorAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></ColorAnimation.EasingFunction>
+                                            </ColorAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -232,7 +308,7 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="#55303040"/>
-                                <Setter Property="Foreground" Value="White"/>
+                                <Setter Property="Foreground" Value="#f0e4ec"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -250,7 +326,7 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
         </LinearGradientBrush>
     </Window.Background>
 
-    <Grid>
+    <Grid x:Name="RootGrid">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -297,8 +373,8 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
                     <Border.Effect>
                         <DropShadowEffect Color="#c85a82" BlurRadius="10" ShadowDepth="0" Opacity="0.4"/>
                     </Border.Effect>
-                    <TextBlock Text="Y" Foreground="White" FontWeight="Bold" FontSize="22"
-                               FontFamily="Segoe UI" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <TextBlock Text="Y" Foreground="{StaticResource BrushText}" FontWeight="Bold" FontSize="22"
+                               FontFamily="Segoe UI, Arial" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
                 <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
                     <TextBlock Text="boSS Tools" Foreground="{StaticResource BrushText}" FontWeight="Bold" FontSize="15"/>
@@ -380,8 +456,13 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
 </Window>
 "@
 
-$reader = New-Object System.Xml.XmlNodeReader $xamlDoc
-$Window = [Windows.Markup.XamlReader]::Load($reader)
+try {
+    $reader = New-Object System.Xml.XmlNodeReader $xamlDoc
+    $Window = [Windows.Markup.XamlReader]::Load($reader)
+} catch {
+    [System.Windows.MessageBox]::Show("Не удалось запустить: $($_.Exception.Message)", 'boSS Tools') | Out-Null
+    exit 1
+}
 
 $BtnFolder       = $Window.FindName('BtnFolder')
 $BtnRefresh      = $Window.FindName('BtnRefresh')
@@ -395,68 +476,69 @@ $StatusText      = $Window.FindName('StatusText')
 $TitleBar        = $Window.FindName('TitleBar')
 $BtnMinimize     = $Window.FindName('BtnMinimize')
 $BtnClose        = $Window.FindName('BtnClose')
+$RootGrid        = $Window.FindName('RootGrid')
+
+$Window.Add_Loaded({
+    if (-not $script:AnimEnabled) { return }
+    try {
+        $fade = New-Object System.Windows.Media.Animation.DoubleAnimation
+        $fade.From = 0
+        $fade.To = 1
+        $fade.Duration = [TimeSpan]::FromMilliseconds(220)
+        $fade.EasingFunction = New-Object System.Windows.Media.Animation.QuadraticEase
+        $RootGrid.BeginAnimation([System.Windows.UIElement]::OpacityProperty, $fade)
+    } catch { }
+})
+
+try {
+    $Window.Dispatcher.Add_UnhandledException({ param($s, $e) $e.Handled = $true; Set-Status ('Ошибка: ' + $e.Exception.Message) -Error })
+} catch { }
+
+function Set-BrushColor {
+    param($Brush, [string]$Hex)
+    $to = [System.Windows.Media.ColorConverter]::ConvertFromString($Hex)
+    $prop = [System.Windows.Media.SolidColorBrush]::ColorProperty
+    if ($script:AnimEnabled) {
+        $anim = New-Object System.Windows.Media.Animation.ColorAnimation
+        $anim.To = $to
+        $anim.Duration = [TimeSpan]::FromMilliseconds(140)
+        $anim.EasingFunction = New-Object System.Windows.Media.Animation.QuadraticEase
+        $Brush.BeginAnimation($prop, $anim)
+    } else {
+        $Brush.BeginAnimation($prop, $null)
+        $Brush.Color = $to
+    }
+}
+
+function Start-ListFade {
+    if (-not $script:AnimEnabled) { return }
+    $ToolList.BeginAnimation([System.Windows.UIElement]::OpacityProperty, $null)
+    $fade = New-Object System.Windows.Media.Animation.DoubleAnimation
+    $fade.From = 0
+    $fade.To = 1
+    $fade.Duration = [TimeSpan]::FromMilliseconds(180)
+    $fade.EasingFunction = New-Object System.Windows.Media.Animation.QuadraticEase
+    $ToolList.BeginAnimation([System.Windows.UIElement]::OpacityProperty, $fade)
+}
 
 # ---------- логика запуска ----------
 
-# Скрипты и команды запускаются как обычный `powershell -File <файл.ps1>`.
-# Раньше было iex(irm URL) + base64 -EncodedCommand через cmd /k: в журналы
-# (4104, 4688, Sysmon) попадали нечитаемая base64-строка и код чужого скрипта
-# как "анонимный блок из строки", что выглядит как обфускация и забивает логи.
-# Теперь командная строка короткая и читаемая, а у каждого запуска есть файл
-# в papa\scripts - его можно открыть, сверить хеш и показать проверяемому.
-
-# имя файла из названия инструмента: только буквы, цифры, '-', '_' и '.'
-function Get-SafeFileName {
-    param([string]$Name)
-    $safe = ($Name -replace '[^\w\.\-]+', '_').Trim('_')
-    if ([string]::IsNullOrWhiteSpace($safe)) { $safe = 'tool' }
-    return $safe
-}
-
-# папка для скачанных скриптов и локальных команд (та же, что у категории scripts)
-function Get-ScriptFolder {
-    $dir = Join-Path $ToolsRoot 'scripts'
-    if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
-    return $dir
-}
-
-# окно powershell, которое остаётся открытым после выполнения (-NoExit).
-# Лаунчер и так работает от админа, поэтому повторный UAC нужен, только если это не так
-function Start-ToolWindow {
-    param([string]$ScriptPath)
-    $params = @{
-        FilePath     = 'powershell.exe'
-        ArgumentList = ('-NoProfile -ExecutionPolicy Bypass -NoExit -File "{0}"' -f $ScriptPath)
-    }
-    if (-not (Test-IsAdministrator)) { $params.Verb = 'RunAs' }
-    Start-Process @params
-}
-
-# качает скрипт в papa\scripts и запускает с диска. Возвращает короткий SHA256 для статусбара
 function Invoke-RemoteScript {
-    param([string]$Name, [string]$Url)
-    $path = Join-Path (Get-ScriptFolder) ((Get-SafeFileName $Name) + '.ps1')
-    $client = New-Object System.Net.WebClient
-    try {
-        $client.Headers.Add('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)')
-        $bytes = $client.DownloadData($Url)
-    } finally { $client.Dispose() }
-    $text = [Text.Encoding]::UTF8.GetString($bytes).TrimStart([char]0xFEFF)
-    if ([string]::IsNullOrWhiteSpace($text)) { throw 'сервер вернул пустой файл' }
-    # UTF-8 с BOM: иначе PowerShell 5.1 читает кириллицу в скрипте как ANSI
-    [System.IO.File]::WriteAllText($path, $text, (New-Object System.Text.UTF8Encoding($true)))
-    $sha = [System.Security.Cryptography.SHA256]::Create()
-    try { $hash = -join ($sha.ComputeHash($bytes) | ForEach-Object { $_.ToString('x2') }) } finally { $sha.Dispose() }
-    Start-ToolWindow -ScriptPath $path
-    return $hash.Substring(0, 12)
+    param([string]$Url)
+    $inner = "try { iex (irm '$Url') } catch { Write-Host `$_ -ForegroundColor Red }; Write-Host ''; Write-Host 'Не закрывай окно - весь вывод потеряется' -ForegroundColor Magenta; while (`$true) { Start-Sleep 3600 }"
+    # тот же -EncodedCommand, что и в Invoke-InlineCommand: вложенные кавычки
+    # при склейке аргументов срезаются, и команда приезжает покалеченной
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($inner))
+    Start-Process cmd.exe -Verb RunAs -ArgumentList "/k powershell -NoProfile -ExecutionPolicy Bypass -EncodedCommand $encoded"
 }
 
-# локальная команда: кладётся в читаемый .ps1 и запускается из него
 function Invoke-InlineCommand {
-    param([string]$Name, [string]$Command)
-    $path = Join-Path (Get-ScriptFolder) ((Get-SafeFileName $Name) + '.ps1')
-    [System.IO.File]::WriteAllText($path, $Command, (New-Object System.Text.UTF8Encoding($true)))
-    Start-ToolWindow -ScriptPath $path
+    param([string]$Command)
+    $inner = "$Command; Write-Host ''; Write-Host 'Не закрывай окно - весь вывод потеряется' -ForegroundColor Magenta; while (`$true) { Start-Sleep 3600 }"
+    # -EncodedCommand, а не -Command: команды с кавычками и точками с запятой
+    # иначе рвутся при склейке аргументов в Start-Process
+    $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($inner))
+    Start-Process powershell.exe -Verb RunAs -ArgumentList @('-NoExit', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', $encoded)
 }
 
 # пишет в строку состояния и сразу перерисовывает окно, чтобы оно не выглядело зависшим
@@ -532,7 +614,7 @@ function Invoke-ToolDownload {
         return $false
     }
     if (-not $Quiet) {
-        Start-Process explorer.exe $dest
+        try { Start-Process explorer.exe $dest } catch { }
         Set-Status "Готово: $($Tool.Name) -> $dest"
     }
     return $true
@@ -562,7 +644,7 @@ function Invoke-CategoryDownload {
     $BtnDownloadAll.IsEnabled = $true
     # при поиске по всем категориям файлы падают в разные папки - открываем корень
     $folder = if ([string]::IsNullOrWhiteSpace($Filter)) { Join-Path $ToolsRoot $CategoryKey } else { $ToolsRoot }
-    if (Test-Path -LiteralPath $folder) { Start-Process explorer.exe $folder }
+    if (Test-Path -LiteralPath $folder) { try { Start-Process explorer.exe $folder } catch { } }
     Update-ToolList -CategoryKey $CategoryKey -Filter $Filter -KeepStatus
     Set-Status "Скачано $ok, ошибок $bad" -Error:($bad -gt 0)
 }
@@ -570,17 +652,16 @@ function Invoke-CategoryDownload {
 # ---------- данные ----------
 
 $Categories = @(
+    @{ Key = 'others';        Label = 'Others' }
     @{ Key = 'ytools';        Label = 'Y Tools' }
     @{ Key = 'orbdiff';       Label = 'OrbDiff' }
     @{ Key = 'spokwn';        Label = 'Spokwn' }
-    @{ Key = 'tonynoh';       Label = 'Tonynoh' }
-    @{ Key = 'redlotus';      Label = 'RedLotus' }
+    @{ Key = 'tonynoh';       Label = 'Tonynoh (для долбоебов)' }
     @{ Key = 'detectac';      Label = 'DetectAC' }
     @{ Key = 'vortex';        Label = 'Vortex' }
     @{ Key = 'scripts';       Label = 'Scripts' }
     @{ Key = 'nirsoft';       Label = 'NirSoft' }
     @{ Key = 'ericzimmerman'; Label = 'EricZimmerman' }
-    @{ Key = 'others';        Label = 'Others' }
     @{ Key = 'dependencies';  Label = 'Dependencies' }
 )
 
@@ -588,9 +669,12 @@ $Tools = @(
     # ---------- Y Tools ----------
     # github.com/sweetvata, всё что начинается на Y-
     @{ Name='Y-Check';    Description='Проверка всех .jar файлов';        Category='ytools'; Kind='Download'; Links=@('https://github.com/sweetvata/Y-Check/releases/download/v2.2/Y-check.exe') }
-    @{ Name='Y-AmCache';  Description='Парсер AmCache';                   Category='ytools'; Kind='Download'; Links=@('https://github.com/sweetvata/Y-AmCache/releases/download/v.1.0.0/Y-AmCache.exe') }
-    @{ Name='Y-Jdamp';    Description='Дампер';                           Category='ytools'; Kind='Download'; Links=@('https://github.com/sweetvata/Y-Jdamp/releases/download/v1.0.0/Y-Jdamp.exe') }
     @{ Name='Y-Alts';     Description='Чекер альт-аккаунтов';             Category='ytools'; Kind='Download'; Links=@('https://github.com/sweetvata/Y-Alts/releases/download/v1.0/Y-Alts.exe') }
+    @{ Name='Y-Jdump';    Description='Дампер';                           Category='ytools'; Kind='Script'; Url='https://raw.githubusercontent.com/sweetvata/Y-Jdump/main/Y-Jdump.ps1' }
+    @{ Name='Y-ClipBoard';          Description='Просмотр истории буфера обмена';           Category='ytools'; Kind='Script'; Url='https://github.com/sweetvata/Y-ClipBoard/releases/download/Y-ClipBoard_1.0/Y-ClipBoard.ps1' }
+    @{ Name='Y-SysInfo';            Description='Сбор информации о системе';                Category='ytools'; Kind='Script'; Url='https://raw.githubusercontent.com/sweetvata/Y-sysinfo/main/check.ps1' }
+    # сам складывает выгрузку в Рабочий стол\papa - совпадает с $ToolsRoot
+    @{ Name='Y-PSOperational';      Description='Разбор событий 4104 из журнала PowerShell/Operational'; Category='ytools'; Kind='Script'; Url='https://raw.githubusercontent.com/sweetvata/Y-PSOperational/main/hunt-ps4104.ps1' }
     # Y-BOssTools (InjGen++) убран 11.08.2026: файл удалён из репозитория
     # sweetvata/Y-BOssTools коммитом f004ba3, релизов там нет, качать нечего
 
@@ -629,12 +713,6 @@ $Tools = @(
     @{ Name='Meow Imports Checker'; Description='Проверка импортов файлов';             Category='tonynoh'; Kind='Download'; Links=@('https://github.com/MeowTonynoh/MeowImportsChecker/releases/download/MeowImportsChecker/MeowImportsChecker.exe') }
     @{ Name='Meow Novoware Fucker'; Description='Детект артефактов Novoware';           Category='tonynoh'; Kind='Link';     Url='https://github.com/MeowTonynoh/MeowNovowareFucker/releases/latest' }
 
-    # ---------- RedLotus ----------
-    # у всех троих релиз без прямой ссылки на файл, поэтому Link, а не Download
-    @{ Name='RL ModAnalyzer';   Description='Анализ модов на признаки читов';        Category='redlotus'; Kind='Link'; Url='https://github.com/ItzIceHere/RedLotus-Mod-Analyzer/releases/latest' }
-    @{ Name='RL TaskSentinel';  Description='Слежение за задачами планировщика';      Category='redlotus'; Kind='Link'; Url='https://github.com/ItzIceHere/RedLotus-Task-Sentinel/releases/latest' }
-    @{ Name='RL AltChecker';    Description='Проверка на альт-аккаунты';              Category='redlotus'; Kind='Link'; Url='https://github.com/ItzIceHere/RedLotusAltChecker/releases/latest' }
-
     # ---------- DetectAC ----------
     @{ Name='Amcache Parser++';         Description='Amcache с YARA и VirusTotal';                Category='detectac'; Kind='Download'; Links=@('https://github.com/detect-ac/Detect.ac-Free-Tools/releases/download/FreeTools/AmcacheParser++.exe') }
     @{ Name='Autoruns++';               Description='Автозагрузка с USN и проверкой подписей';    Category='detectac'; Kind='Download'; Links=@('https://github.com/detect-ac/Detect.ac-Free-Tools/releases/download/FreeTools/Autoruns++.exe') }
@@ -667,10 +745,6 @@ $Tools = @(
     # ---------- Scripts: свои ----------
     @{ Name='SS Starter';           Description='Свой стартер из MyPowerShellScripts-ssing'; Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/piespeas/MyPowerShellScripts-ssing/refs/heads/main/ss_starter.ps1' }
     @{ Name='RedLotus BAM';         Description='Разбор BAM от PureIntent';                 Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/PureIntent/ScreenShare/main/RedLotusBam.ps1' }
-    @{ Name='Y-ClipBoard';          Description='Просмотр истории буфера обмена';           Category='scripts'; Kind='Script'; Url='https://github.com/sweetvata/Y-ClipBoard/releases/download/Y-ClipBoard_1.0/Y-ClipBoard.ps1' }
-    @{ Name='Y-SysInfo';            Description='Сбор информации о системе';                Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/sweetvata/Y-sysinfo/main/check.ps1' }
-    # сам складывает выгрузку в Рабочий стол\papa - совпадает с $ToolsRoot
-    @{ Name='Y-PSOperational';      Description='Разбор событий 4104 из журнала PowerShell/Operational'; Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/sweetvata/Y-PSOperational/main/hunt-ps4104.ps1' }
     @{ Name='LOLBAS Bypass Killer'; Description='Детект LOLBAS-байпасов';                   Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/allahbypasses/main/refs/heads/main/lolbasbypasskillerminecraft2016.ps1' }
     # ВНИМАНИЕ: PC-Check качает себя в C:\Temp и добавляет C:\Temp\Dump в исключения Defender
     @{ Name='PC-Check';             Description='PC-Check от dot-sys, качается в C:\Temp и запускается'; Category='scripts'; Kind='Inline'; Command='New-Item -Path "C:\Temp" -ItemType Directory -Force | Out-Null; Set-Location "C:\temp"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/dot-sys/PC-Check/master/PCCheck.ps1" -OutFile "PC-Check.ps1"; Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force; Add-MpPreference -ExclusionPath ''C:\Temp\Dump'' | Out-Null; .\PC-Check.ps1' }
@@ -684,11 +758,10 @@ $Tools = @(
     # позиционными аргументами, обычный param($p) на этом падает.
     # Menu.ps1 намеренно не качаем: последней строкой PCCheck.ps1 вызывает его обратно,
     # а с подменённым Read-Host меню зациклится на "Invalid option".
-    # ВНИМАНИЕ: добавляет весь C:\Temp в исключения Defender и на время работы ставит
-    # ExecutionPolicy машины в RemoteSigned (PCCheck сам запускает powershell -File без
-    # Bypass, без этого его дочерние скрипты не стартуют). Исключение PCCheck снимает сам
-    # в конце, политика возвращается на прежнюю в finally.
-    @{ Name='PC-Check v2 (авто)';   Description='PCCheckv2 от dot-sys, полный дамп без меню; трогает Defender и ExecutionPolicy'; Category='scripts'; Kind='Inline'; Command='$ErrorActionPreference=''SilentlyContinue''; New-Item -Path ''C:\Temp\Scripts'',''C:\Temp\Dump'' -ItemType Directory -Force | Out-Null; Get-ChildItem ''C:\Temp\Dump'' | Remove-Item -Recurse -Force; Get-ChildItem ''C:\Temp\Scripts'' -File | Remove-Item -Force; $b=''https://raw.githubusercontent.com/dot-sys/PCCheckv2/main/''; foreach($f in ''PCCheck.ps1'',''MFT.ps1'',''Registry.ps1'',''SystemLogs.ps1'',''ProcDump.ps1'',''Localhost.ps1'',''Viewer.html''){ Invoke-WebRequest -Uri ($b+$f) -OutFile (''C:\Temp\Scripts\''+$f) }; Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force; $oldEP=Get-ExecutionPolicy -Scope LocalMachine; Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy RemoteSigned -Force; Add-MpPreference -ExclusionPath ''C:\Temp'' | Out-Null; function global:Read-Host { param([Parameter(ValueFromRemainingArguments=$true)]$a) ''Y'' }; try { & ''C:\Temp\Scripts\PCCheck.ps1'' } finally { Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy $oldEP -Force }' }
+    # ВНИМАНИЕ: добавляет весь C:\Temp в исключения Defender и переводит
+    # ExecutionPolicy машины в RemoteSigned. Исключение PCCheck снимает сам в конце,
+    # политика остаётся - откат: Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy Undefined
+    @{ Name='PC-Check v2 (авто)';   Description='PCCheckv2 от dot-sys, полный дамп без меню; трогает Defender и ExecutionPolicy, Menu.ps1 заменён заглушкой, ссылка SQLECmd подменяется на net9'; Category='scripts'; Kind='Inline'; Command='$ErrorActionPreference=''SilentlyContinue''; New-Item -Path ''C:\Temp\Scripts'',''C:\Temp\Dump'' -ItemType Directory -Force | Out-Null; Get-ChildItem ''C:\Temp\Dump'' | Remove-Item -Recurse -Force; Get-ChildItem ''C:\Temp\Scripts'' -File | Remove-Item -Force; $b=''https://raw.githubusercontent.com/dot-sys/PCCheckv2/main/''; foreach($f in ''PCCheck.ps1'',''MFT.ps1'',''Registry.ps1'',''SystemLogs.ps1'',''ProcDump.ps1'',''Localhost.ps1'',''Viewer.html''){ Invoke-WebRequest -Uri ($b+$f) -OutFile (''C:\Temp\Scripts\''+$f) }; Set-Content -Path ''C:\Temp\Scripts\Menu.ps1'' -Value '''' -Encoding ASCII; (Get-Content ''C:\Temp\Scripts\PCCheck.ps1'' -Raw -Encoding UTF8).Replace(''ericzimmermanstools.com/SQLECmd.zip'',''ericzimmermanstools.com/net9/SQLECmd.zip'') | Set-Content ''C:\Temp\Scripts\PCCheck.ps1'' -Encoding UTF8; Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force; Set-ExecutionPolicy -Scope LocalMachine -ExecutionPolicy RemoteSigned -Force; Add-MpPreference -ExclusionPath ''C:\Temp'' | Out-Null; function global:Read-Host { param([Parameter(ValueFromRemainingArguments=$true)]$a) ''Y'' }; & ''C:\Temp\Scripts\PCCheck.ps1''' }
     @{ Name='CSRSS Signature Check';Description='Проверка подписей CSRSS от dot-sys';  Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/dot-sys/CSRSS-Signature-Check/main/csrss.ps1' }
     @{ Name='Recording Check';      Description='Следы программ записи экрана';        Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/dot-sys/Recording-Check/main/Recording-Check.ps1' }
     @{ Name='Метрики интерфейсов';  Description='IPv4-интерфейсы по метрике - ищем хотспот'; Category='scripts'; Kind='Inline'; Command='Get-NetIPInterface | Where-Object {$_.AddressFamily -eq ''IPv4'' -and $_.InterfaceMetric -ne ''0''} | Sort-Object -Property InterfaceMetric | Format-Table -Property InterfaceIndex, InterfaceAlias, AddressFamily, InterfaceMetric -AutoSize' }
@@ -700,15 +773,12 @@ $Tools = @(
     @{ Name='Zeezy Services';              Description='Проверка служб от zeezyexe';            Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/zeezyexe/services-checker/refs/heads/main/zeezyservices.psl' }
     @{ Name='Doomsday Finder';             Description='DoomsDayDetector от zedoonvm1';         Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/zedoonvm1/powershell-scripts/refs/heads/main/DoomsDayDetector.ps1' }
     @{ Name='All In One';                  Description='Комбайн для скриншера от Enr1c0o';      Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/Enr1c0o/Powershell-Scripts/refs/heads/main/All-in-one.ps1' }
-    # Mod Analyzer от p1aegg убран: modanalyzer.ps1 удалён из репозитория (404), остался только ClassLoaderDump.ps1
     @{ Name='JAR Parser (script)';         Description='Разбор JAR-файлов';                     Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/l4rpsucks/Scripts/refs/heads/main/JARParser.ps1' }
     @{ Name='Fileless Bypass Detection';   Description='Детект fileless-байпасов';              Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/l4rpsucks/Scripts/refs/heads/main/FilelessBypassDetection.ps1' }
     @{ Name='Macro Scanner';               Description='Поиск макросов мышиного софта';         Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/zeezyexe/macro-scanner/refs/heads/main/catchmacro.ps1' }
     @{ Name='ClassLoader Dump';            Description='Дамп данных ClassLoader';               Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/p1aegg/powershell/refs/heads/main/ClassLoaderDump.ps1' }
     @{ Name='Meow Mod Analyzer';           Description='Анализ модов от MeowTonynoh';           Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/MeowTonynoh/MeowModAnalyzer/main/MeowModAnalyzer.ps1' }
     @{ Name='Prefetch Integrity Analyzer'; Description='Целостность prefetch (RedLotus)';       Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/bacanoicua/Screenshare/main/RedLotusPrefetchIntegrityAnalyzer.ps1' }
-    @{ Name='Lily Services';               Description='Проверка служб от PraiseLily';          Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/Lafferrr/SSTools/refs/heads/main/LilysServices.ps1' }
-    @{ Name='Lily Services Enabler';       Description='Включение служб';                       Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/Lafferrr/SSTools/refs/heads/main/LilysServicesEnabler.ps1' }
     @{ Name='DQRKIS Fucker';               Description='Проверка артефактов DQRKIS';            Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/cheesecatlol/DQRKIS-FUCKER/refs/heads/main/DqrkisFucker.ps1' }
     @{ Name='MacroDetector';               Description='Следы макросов и кликеров';             Category='scripts'; Kind='Script'; Url='https://raw.githubusercontent.com/NiccBlahh/MacroDetector/refs/heads/main/MacroDetector.ps1' }
 
@@ -742,21 +812,21 @@ $Tools = @(
     @{ Name='Timeline Explorer';        Description='Просмотр таймлайнов';              Category='ericzimmerman'; Kind='Download'; Links=@('https://download.ericzimmermanstools.com/net9/TimelineExplorer.zip') }
 
     # ---------- Others ----------
+    @{ Name='System Informer Canary'; Description='Просмотр процессов и прочего, canary-сборка'; Category='others'; Kind='Download'; Links=@('https://github.com/winsiderss/si-builds/releases/download/4.0.26255.346/systeminformer-build-canary-setup.exe') }
+    @{ Name='Everything 1.5a';        Description='Мгновенный поиск файлов по имени, ветка 1.5 (сборка 1.5.0.1423b)'; Category='others'; Kind='Download'; Links=@('https://www.voidtools.com/Everything-1.5.0.1423b.x64-Setup.exe') }
+    @{ Name='P1AE Javaw';             Description='Сканер javaw';                          Category='others'; Kind='Download'; Links=@('https://github.com/p1aegg/javaw/releases/download/v1.9/P1AE.Javaw.exe') }
     @{ Name='Jarabel';                Description='Находит .jar файлы на компьютере';      Category='others'; Kind='Download'; Links=@('https://github.com/nay-cat/Jarabel/releases/download/light/Jarabel.Light.exe') }
     @{ Name='Luyten';                 Description='Java-декомпилятор с GUI для Procyon';   Category='others'; Kind='Download'; Links=@('https://github.com/deathmarine/Luyten/releases/download/v0.5.4_Rebuilt_with_Latest_depenencies/luyten-0.5.4.exe') }
     @{ Name='VM Aware';               Description='Детект виртуальных машин';              Category='others'; Kind='Download'; Links=@('https://github.com/NotRequiem/VMAware/releases/download/v2.8.0/vmaware.exe') }
     @{ Name='NTFS Parser';            Description='Форензик-инструмент для NTFS';          Category='others'; Kind='Download'; Links=@('https://github.com/thewhiteninja/ntfstool/releases/download/v1.7/ntfstool.x64.exe') }
     @{ Name='Hayabusa';               Description='Быстрый генератор форензик-таймлайна';  Category='others'; Kind='Download'; Links=@('https://github.com/Yamato-Security/hayabusa/releases/download/v3.10.0/hayabusa-3.10.0-all-platforms.zip') }
-    @{ Name='Everything 1.5';         Description='Мгновенный поиск файлов по имени, ветка 1.5'; Category='others'; Kind='Download'; Links=@('https://www.voidtools.com/Everything-1.5.0.1418b.x64-Setup.exe') }
     @{ Name='HxD';                    Description='Hex-редактор';                          Category='others'; Kind='Download'; Links=@('https://mh-nexus.de/downloads/HxDSetup.zip') }
     @{ Name='DIE Engine';             Description='Определяет тип файла, пакер, компилятор';Category='others'; Kind='Link';    Url='https://github.com/horsicq/DIE-engine/releases' }
     @{ Name='Velociraptor';           Description='DFIR и threat hunting на эндпоинтах';   Category='others'; Kind='Link';     Url='https://github.com/Velocidex/velociraptor/releases/latest' }
-    @{ Name='P1AE Javaw';             Description='Сканер javaw';                          Category='others'; Kind='Download'; Links=@('https://github.com/p1aegg/javaw/releases/download/v1.9/P1AE.Javaw.exe') }
     @{ Name='Macro Scanner (Lafferr)';Description='Сканер макросов от Lafferr';            Category='others'; Kind='Download'; Links=@('https://github.com/Lafferrr/MacroScanner/releases/download/MAW/MacroScanner.exe') }
     @{ Name='String Checker';         Description='Проверка строк от Lafferr';             Category='others'; Kind='Download'; Links=@('https://github.com/Lafferrr/SSTools/raw/refs/heads/main/SSTools/Strings/LaffersStringsChecker.exe') }
     @{ Name='Java Library Analyzer';  Description='Анализ библиотек Java от Lafferr';      Category='others'; Kind='Download'; Links=@('https://github.com/Lafferrr/SSTools/raw/refs/heads/main/SSTools/JavaLibraryAnalyzer/JavaLibraryAnalyzer.exe','https://github.com/Lafferrr/SSTools/raw/refs/heads/main/SSTools/JavaLibraryAnalyzer/library_baseline.bin','https://github.com/Lafferrr/SSTools/raw/refs/heads/main/SSTools/JavaLibraryAnalyzer/natives_baseline.bin') }
     @{ Name='PJ Cheat Scanner Lite';  Description='Проверка строк';                        Category='others'; Kind='Download'; Links=@('https://github.com/gorbgallin/Pj-sCheatScannerLite/releases/download/1.1/PjCheatScannerLite.exe','https://github.com/gorbgallin/Pj-sCheatScannerLite/releases/download/1.1/cheat_strings.txt') }
-    @{ Name='System Informer';        Description='Просмотр процессов и прочего';          Category='others'; Kind='Download'; Links=@('https://github.com/winsiderss/si-builds/releases/download/4.0.26115.206/systeminformer-build-canary-setup.exe') }
 
     # ---------- Dependencies ----------
     @{ Name='NET 8.0';   Description='Рантайм .NET 8.0';           Category='dependencies'; Kind='Link';     Url='https://dotnet.microsoft.com/en-us/download/dotnet/8.0' }
@@ -793,7 +863,7 @@ function New-KindBadge {
     $t.Text = $spec.Text
     $t.FontSize = 9
     $t.FontWeight = 'Bold'
-    $t.Foreground = [System.Windows.Media.Brushes]::White
+    $t.Foreground = $Window.FindResource('BrushText')
     $b.Child = $t
     return $b
 }
@@ -811,11 +881,18 @@ function Update-ToolList {
         $tb.Text = 'Ничего не найдено'
         $tb.Foreground = $Window.FindResource('BrushMuted')
         $ToolList.Children.Add($tb) | Out-Null
+        if (-not $KeepStatus) {
+            Start-ListFade
+            if ($searching) { Set-Status "Найдено 0 из $($Tools.Count) - поиск идёт по всем категориям" }
+            else { Set-Status "Показано 0 - всего в лаунчере $($Tools.Count)" }
+        }
         return
     }
     foreach ($tool in $items) {
         $card = New-Object System.Windows.Controls.Border
-        $card.BorderBrush = $Window.FindResource('BrushBorder')
+        $cardEdge = New-Object System.Windows.Media.SolidColorBrush
+        $cardEdge.Color = [System.Windows.Media.ColorConverter]::ConvertFromString('#52304a')
+        $card.BorderBrush = $cardEdge
         $card.BorderThickness = '1'
         $card.CornerRadius = '6'
         $card.Padding = '12,10,12,10'
@@ -834,8 +911,8 @@ function Update-ToolList {
         $grid.ColumnDefinitions.Add($col2)
 
         # подсветка карточки под курсором
-        $card.Add_MouseEnter({ param($s, $e) $s.BorderBrush = $Window.FindResource('BrushAccent') })
-        $card.Add_MouseLeave({ param($s, $e) $s.BorderBrush = $Window.FindResource('BrushBorder') })
+        $card.Add_MouseEnter({ param($s, $e) Set-BrushColor -Brush $s.BorderBrush -Hex '#c85a82' })
+        $card.Add_MouseLeave({ param($s, $e) Set-BrushColor -Brush $s.BorderBrush -Hex '#52304a' })
 
         $textStack = New-Object System.Windows.Controls.StackPanel
         $textStack.VerticalAlignment = 'Center'
@@ -893,33 +970,21 @@ function Update-ToolList {
         $actionBtn.Add_Click({
             param($s, $e)
             $t = $s.Tag
-            switch ($t.Kind) {
-                'Script'   {
-                    $s.IsEnabled = $false
-                    Set-Status "Качаю скрипт: $($t.Name)"
-                    try {
-                        $sum = Invoke-RemoteScript -Name $t.Name -Url $t.Url
-                        Set-Status "Запущено: $($t.Name) - papa\scripts, sha256 $sum..."
-                    } catch {
-                        Set-Status "Не запустилось - $($t.Name): $($_.Exception.Message)" -Error
+            try {
+                switch ($t.Kind) {
+                    'Script'   { Invoke-RemoteScript -Url $t.Url; Set-Status "Запущено: $($t.Name)" }
+                    'Inline'   { Invoke-InlineCommand -Command $t.Command; Set-Status "Запущено: $($t.Name)" }
+                    'Download' {
+                        $s.IsEnabled = $false
+                        Invoke-ToolDownload -Tool $t | Out-Null
+                        $s.IsEnabled = $true
+                        Update-ToolList -CategoryKey $script:SelectedCategory -Filter $TxtFilter.Text -KeepStatus
                     }
-                    $s.IsEnabled = $true
+                    'Link'     { Start-Process $t.Url; Set-Status "Открыто: $($t.Name)" }
                 }
-                'Inline'   {
-                    try {
-                        Invoke-InlineCommand -Name $t.Name -Command $t.Command
-                        Set-Status "Запущено: $($t.Name)"
-                    } catch {
-                        Set-Status "Не запустилось - $($t.Name): $($_.Exception.Message)" -Error
-                    }
-                }
-                'Download' {
-                    $s.IsEnabled = $false
-                    Invoke-ToolDownload -Tool $t | Out-Null
-                    $s.IsEnabled = $true
-                    Update-ToolList -CategoryKey $script:SelectedCategory -Filter $TxtFilter.Text -KeepStatus
-                }
-                'Link'     { Start-Process $t.Url; Set-Status "Открыто: $($t.Name)" }
+            } catch {
+                $s.IsEnabled = $true
+                Set-Status ('Ошибка: ' + $_.Exception.Message) -Error
             }
         })
         $actionBtn.VerticalAlignment = 'Center'
@@ -932,6 +997,7 @@ function Update-ToolList {
     }
 
     if ($KeepStatus) { return }
+    Start-ListFade
     $shown = @($items).Count
     if ($searching) { Set-Status "Найдено $shown из $($Tools.Count) - поиск идёт по всем категориям" }
     else { Set-Status "Показано $shown - всего в лаунчере $($Tools.Count)" }
@@ -964,6 +1030,9 @@ foreach ($cat in $Categories) {
     $inner.ColumnDefinitions.Add($c2)
     $lbl = New-Object System.Windows.Controls.TextBlock
     $lbl.Text = $cat.Label
+    # длинные подписи ('Tonynoh (для долбоебов)') переносим, колонка 180 их не вмещает
+    $lbl.TextWrapping = 'Wrap'
+    $lbl.VerticalAlignment = 'Center'
     $num = New-Object System.Windows.Controls.TextBlock
     $num.Text = "$count"
     $num.FontSize = 11
@@ -993,8 +1062,17 @@ $TxtFilter.Add_TextChanged({
 })
 $BtnClearFilter.Add_Click({ $TxtFilter.Text = '' })
 $BtnRefresh.Add_Click({ Update-ToolList -CategoryKey $script:SelectedCategory -Filter $TxtFilter.Text; Set-Status 'Обновлено' })
-$BtnFolder.Add_Click({ Start-Process explorer.exe $ToolsRoot })
-$BtnDownloadAll.Add_Click({ Invoke-CategoryDownload -CategoryKey $script:SelectedCategory -Filter $TxtFilter.Text })
+$BtnFolder.Add_Click({
+    try { Start-Process explorer.exe $ToolsRoot }
+    catch { Set-Status ('Ошибка: ' + $_.Exception.Message) -Error }
+})
+$BtnDownloadAll.Add_Click({
+    try { Invoke-CategoryDownload -CategoryKey $script:SelectedCategory -Filter $TxtFilter.Text }
+    catch {
+        $BtnDownloadAll.IsEnabled = $true
+        Set-Status ('Ошибка: ' + $_.Exception.Message) -Error
+    }
+})
 
 # кастомный заголовок: перетаскивание, минимизация, закрытие
 $TitleBar.Add_MouseLeftButtonDown({ $Window.DragMove() })
@@ -1002,4 +1080,9 @@ $BtnMinimize.Add_Click({ $Window.WindowState = 'Minimized' })
 $BtnClose.Add_Click({ $Window.Close() })
 Update-ToolList -CategoryKey $script:SelectedCategory -Filter ''
 
-$Window.ShowDialog() | Out-Null
+try {
+    $Window.ShowDialog() | Out-Null
+} catch {
+    [System.Windows.MessageBox]::Show("Не удалось запустить: $($_.Exception.Message)", 'boSS Tools') | Out-Null
+    exit 1
+}
