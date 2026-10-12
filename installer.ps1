@@ -72,45 +72,64 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
         Title="boSS Tools" Height="640" Width="960"
         WindowStartupLocation="CenterScreen"
         UseLayoutRounding="True" SnapsToDevicePixels="True"
+        FontFamily="Segoe UI Variable Text, Segoe UI, Arial"
         AllowsTransparency="False">
     <shell:WindowChrome.WindowChrome>
         <shell:WindowChrome CaptionHeight="0" ResizeBorderThickness="5" GlassFrameThickness="0" UseAeroCaptionButtons="False"/>
     </shell:WindowChrome.WindowChrome>
     <Window.Resources>
         <!-- цвета -->
-        <SolidColorBrush x:Key="BrushBg"            Color="#2d1a22"/>
-        <SolidColorBrush x:Key="BrushPanel"         Color="#3a2030"/>
-        <SolidColorBrush x:Key="BrushBorder"        Color="#52304a"/>
-        <SolidColorBrush x:Key="BrushAccent"        Color="#c85a82"/>
-        <SolidColorBrush x:Key="BrushAccentDark"    Color="#9a3a60"/>
-        <SolidColorBrush x:Key="BrushBadge"         Color="#b04870"/>
-        <SolidColorBrush x:Key="BrushText"          Color="#f0e4ec"/>
-        <SolidColorBrush x:Key="BrushMuted"         Color="#8a6878"/>
-        <SolidColorBrush x:Key="BrushSecondaryText" Color="#d4b8c8"/>
-        <SolidColorBrush x:Key="BrushScrollThumb"   Color="#c85a82"/>
-        <SolidColorBrush x:Key="BrushScrollTrack"   Color="#3a2030"/>
+        <SolidColorBrush x:Key="BrushBg"            Color="#07070a"/>
+        <SolidColorBrush x:Key="BrushPanel"         Color="#0cffffff"/>
+        <SolidColorBrush x:Key="BrushBorder"        Color="#14ffffff"/>
+        <SolidColorBrush x:Key="BrushAccent"        Color="#f7b8d2"/>
+        <SolidColorBrush x:Key="BrushAccentDark"    Color="#f49ac0"/>
+        <SolidColorBrush x:Key="BrushBadge"         Color="#1ff7b8d2"/>
+        <SolidColorBrush x:Key="BrushInk"           Color="#2b1020"/>
+        <SolidColorBrush x:Key="BrushText"          Color="#f3eef1"/>
+        <SolidColorBrush x:Key="BrushMuted"         Color="#6af3eef1"/>
+        <SolidColorBrush x:Key="BrushSecondaryText" Color="#a3f3eef1"/>
+        <SolidColorBrush x:Key="BrushScrollThumb"   Color="#80f7b8d2"/>
+        <SolidColorBrush x:Key="BrushScrollTrack"   Color="#00000000"/>
 
         <!-- кнопка основная -->
         <Style x:Key="PrimaryButton" TargetType="Button">
-            <Setter Property="Foreground" Value="{StaticResource BrushText}"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushInk}"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Padding" Value="14,7"/>
-            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="FontWeight" Value="Bold"/>
             <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="Bd" CornerRadius="12" Padding="{TemplateBinding Padding}">
                             <Border.Background>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-                                    <GradientStop Color="#c85a82" Offset="0"/>
-                                    <GradientStop Color="#9a3a60" Offset="1"/>
-                                </LinearGradientBrush>
+                                <SolidColorBrush Color="#f7b8d2"/>
                             </Border.Background>
                             <ContentPresenter x:Name="CP" HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
+                                <Trigger.EnterActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <ColorAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#f49ac0" Duration="$HoverDur">
+                                                <ColorAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></ColorAnimation.EasingFunction>
+                                            </ColorAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.EnterActions>
+                                <Trigger.ExitActions>
+                                    <BeginStoryboard>
+                                        <Storyboard>
+                                            <ColorAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#f7b8d2" Duration="$HoverDur">
+                                                <ColorAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></ColorAnimation.EasingFunction>
+                                            </ColorAnimation>
+                                        </Storyboard>
+                                    </BeginStoryboard>
+                                </Trigger.ExitActions>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
                                 <Trigger.EnterActions>
                                     <BeginStoryboard>
                                         <Storyboard>
@@ -130,26 +149,6 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
                                     </BeginStoryboard>
                                 </Trigger.ExitActions>
                             </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Trigger.EnterActions>
-                                    <BeginStoryboard>
-                                        <Storyboard>
-                                            <DoubleAnimation Storyboard.TargetName="CP" Storyboard.TargetProperty="Opacity" To="0.75" Duration="$HoverDur">
-                                                <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
-                                            </DoubleAnimation>
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </Trigger.EnterActions>
-                                <Trigger.ExitActions>
-                                    <BeginStoryboard>
-                                        <Storyboard>
-                                            <DoubleAnimation Storyboard.TargetName="CP" Storyboard.TargetProperty="Opacity" To="1" Duration="$HoverDur">
-                                                <DoubleAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></DoubleAnimation.EasingFunction>
-                                            </DoubleAnimation>
-                                        </Storyboard>
-                                    </BeginStoryboard>
-                                </Trigger.ExitActions>
-                            </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
@@ -159,7 +158,7 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
         <!-- кнопка вторичная -->
         <Style x:Key="SecondaryButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{StaticResource BrushSecondaryText}"/>
+            <Setter Property="Foreground" Value="{StaticResource BrushText}"/>
             <Setter Property="BorderBrush" Value="{StaticResource BrushBorder}"/>
             <Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Padding" Value="14,7"/>
@@ -167,12 +166,12 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="6" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="Bd" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="12" Padding="{TemplateBinding Padding}">
                             <Border.Background>
-                                <SolidColorBrush Color="#003a2030"/>
+                                <SolidColorBrush Color="#0cffffff"/>
                             </Border.Background>
                             <Border.BorderBrush>
-                                <SolidColorBrush Color="#52304a"/>
+                                <SolidColorBrush Color="#14ffffff"/>
                             </Border.BorderBrush>
                             <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
                         </Border>
@@ -181,10 +180,10 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
                                 <Trigger.EnterActions>
                                     <BeginStoryboard>
                                         <Storyboard>
-                                            <ColorAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#3a2030" Duration="$HoverDur">
+                                            <ColorAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#13ffffff" Duration="$HoverDur">
                                                 <ColorAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></ColorAnimation.EasingFunction>
                                             </ColorAnimation>
-                                            <ColorAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)" To="#c85a82" Duration="$HoverDur">
+                                            <ColorAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)" To="#24ffffff" Duration="$HoverDur">
                                                 <ColorAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></ColorAnimation.EasingFunction>
                                             </ColorAnimation>
                                         </Storyboard>
@@ -193,10 +192,10 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
                                 <Trigger.ExitActions>
                                     <BeginStoryboard>
                                         <Storyboard>
-                                            <ColorAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#003a2030" Duration="$HoverDur">
+                                            <ColorAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="(Border.Background).(SolidColorBrush.Color)" To="#0cffffff" Duration="$HoverDur">
                                                 <ColorAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></ColorAnimation.EasingFunction>
                                             </ColorAnimation>
-                                            <ColorAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)" To="#52304a" Duration="$HoverDur">
+                                            <ColorAnimation Storyboard.TargetName="Bd" Storyboard.TargetProperty="(Border.BorderBrush).(SolidColorBrush.Color)" To="#14ffffff" Duration="$HoverDur">
                                                 <ColorAnimation.EasingFunction><QuadraticEase EasingMode="EaseOut"/></ColorAnimation.EasingFunction>
                                             </ColorAnimation>
                                         </Storyboard>
@@ -214,17 +213,10 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Thumb">
-                        <Border x:Name="Bd" CornerRadius="4" Margin="2">
-                            <Border.Background>
-                                <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                                    <GradientStop Color="#c85a82" Offset="0"/>
-                                    <GradientStop Color="#9a3a60" Offset="1"/>
-                                </LinearGradientBrush>
-                            </Border.Background>
-                        </Border>
+                        <Border x:Name="Bd" CornerRadius="4" Margin="2" Opacity="0.8" Background="{StaticResource BrushScrollThumb}"/>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Opacity" Value="0.8"/>
+                                <Setter TargetName="Bd" Property="Opacity" Value="1"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -293,7 +285,7 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
         </Style>
         <Style x:Key="CloseButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{StaticResource BrushMuted}"/>
+            <Setter Property="Foreground" Value="#a3f3eef1"/>
             <Setter Property="BorderThickness" Value="0"/>
             <Setter Property="Width" Value="32"/>
             <Setter Property="Height" Value="32"/>
@@ -302,13 +294,13 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="4">
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="12">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#55303040"/>
-                                <Setter Property="Foreground" Value="#f0e4ec"/>
+                                <Setter TargetName="Bd" Property="Background" Value="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"/>
+                                <Setter Property="Foreground" Value="#f3eef1"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -319,11 +311,7 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
 
     <!-- градиентный фон окна -->
     <Window.Background>
-        <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#2d1a22" Offset="0"/>
-            <GradientStop Color="#321e28" Offset="0.5"/>
-            <GradientStop Color="#28181e" Offset="1"/>
-        </LinearGradientBrush>
+        <SolidColorBrush Color="#07070a"/>
     </Window.Background>
 
     <Grid x:Name="RootGrid">
@@ -332,8 +320,52 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
 
+        <Grid x:Name="BgLayer" Grid.RowSpan="2" IsHitTestVisible="False">
+            <Rectangle Fill="#07070a"/>
+            <Rectangle x:Name="Glow1">
+                <Rectangle.Fill>
+                    <RadialGradientBrush x:Name="BrushGlow1" MappingMode="RelativeToBoundingBox" Center="0.12,-0.08" GradientOrigin="0.12,-0.08" RadiusX="0.78" RadiusY="0.936">
+                        <GradientStop Color="#26f7b8d2" Offset="0"/>
+                        <GradientStop Color="#15f7b8d2" Offset="0.35"/>
+                        <GradientStop Color="#07f7b8d2" Offset="0.6"/>
+                        <GradientStop Color="#00f7b8d2" Offset="1"/>
+                    </RadialGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+            <Rectangle x:Name="Glow2">
+                <Rectangle.Fill>
+                    <RadialGradientBrush x:Name="BrushGlow2" MappingMode="RelativeToBoundingBox" Center="1,0.3" GradientOrigin="1,0.3" RadiusX="0.65" RadiusY="0.832">
+                        <GradientStop Color="#18f7b8d2" Offset="0"/>
+                        <GradientStop Color="#0df7b8d2" Offset="0.35"/>
+                        <GradientStop Color="#04f7b8d2" Offset="0.6"/>
+                        <GradientStop Color="#00f7b8d2" Offset="1"/>
+                    </RadialGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+            <Rectangle x:Name="Glow3">
+                <Rectangle.Fill>
+                    <RadialGradientBrush x:Name="BrushGlow3" MappingMode="RelativeToBoundingBox" Center="0.3,1.12" GradientOrigin="0.3,1.12" RadiusX="0.715" RadiusY="0.832">
+                        <GradientStop Color="#1df49ac0" Offset="0"/>
+                        <GradientStop Color="#10f49ac0" Offset="0.35"/>
+                        <GradientStop Color="#05f49ac0" Offset="0.6"/>
+                        <GradientStop Color="#00f49ac0" Offset="1"/>
+                    </RadialGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+            <Rectangle x:Name="Glow4">
+                <Rectangle.Fill>
+                    <RadialGradientBrush x:Name="BrushGlow4" MappingMode="RelativeToBoundingBox" Center="0.7,0" GradientOrigin="0.7,0" RadiusX="0.52" RadiusY="0.624">
+                        <GradientStop Color="#0affe2ce" Offset="0"/>
+                        <GradientStop Color="#06ffe2ce" Offset="0.35"/>
+                        <GradientStop Color="#02ffe2ce" Offset="0.6"/>
+                        <GradientStop Color="#00ffe2ce" Offset="1"/>
+                    </RadialGradientBrush>
+                </Rectangle.Fill>
+            </Rectangle>
+        </Grid>
+
         <!-- кастомный тёмный заголовок вместо белой системной полосы -->
-        <Grid Grid.Row="0" x:Name="TitleBar" Height="36" Background="#1a1018">
+        <Grid Grid.Row="0" x:Name="TitleBar" Height="36" Background="Transparent">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*"/>
                 <ColumnDefinition Width="Auto"/>
@@ -341,8 +373,12 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
             <TextBlock Text="boSS Tools" Foreground="{StaticResource BrushMuted}"
                        FontSize="12" VerticalAlignment="Center" Margin="14,0,0,0"/>
             <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,4,0">
-                <Button x:Name="BtnMinimize" Content="&#x2013;" Style="{StaticResource CloseButton}"/>
-                <Button x:Name="BtnClose"    Content="&#x2715;" Style="{StaticResource CloseButton}"/>
+                <Button x:Name="BtnMinimize" Content="&#x2013;" Style="{StaticResource CloseButton}">
+                    <Button.Tag><SolidColorBrush Color="#13ffffff"/></Button.Tag>
+                </Button>
+                <Button x:Name="BtnClose"    Content="&#x2715;" Style="{StaticResource CloseButton}">
+                    <Button.Tag><SolidColorBrush Color="#33f49ac0"/></Button.Tag>
+                </Button>
             </StackPanel>
         </Grid>
 
@@ -364,16 +400,12 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
                 <!-- иконка Y — точно как на скрине: скруглённый квадрат, вертикальный градиент розовый->малиновый, буква Y -->
                 <Border CornerRadius="14" Width="44" Height="44">
                     <Border.Background>
-                        <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                            <GradientStop Color="#c85a82" Offset="0"/>
-                            <GradientStop Color="#b04870" Offset="0.5"/>
-                            <GradientStop Color="#8a3258" Offset="1"/>
-                        </LinearGradientBrush>
+                        <SolidColorBrush Color="#f7b8d2"/>
                     </Border.Background>
                     <Border.Effect>
-                        <DropShadowEffect Color="#c85a82" BlurRadius="10" ShadowDepth="0" Opacity="0.4"/>
+                        <DropShadowEffect Color="#f7b8d2" BlurRadius="12" ShadowDepth="0" Opacity="0.22"/>
                     </Border.Effect>
-                    <TextBlock Text="Y" Foreground="{StaticResource BrushText}" FontWeight="Bold" FontSize="22"
+                    <TextBlock Text="Y" Foreground="{StaticResource BrushInk}" FontWeight="Bold" FontSize="22"
                                FontFamily="Segoe UI, Arial" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                 </Border>
                 <StackPanel Margin="12,0,0,0" VerticalAlignment="Center">
@@ -393,28 +425,38 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
-            <Border Background="{StaticResource BrushPanel}" BorderBrush="{StaticResource BrushBorder}"
-                    BorderThickness="1" CornerRadius="6">
+            <Border Background="{StaticResource BrushPanel}" BorderThickness="1" CornerRadius="12">
+                <Border.Style>
+                    <Style TargetType="Border">
+                        <Setter Property="BorderBrush" Value="{StaticResource BrushBorder}"/>
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsKeyboardFocused, ElementName=TxtFilter}" Value="True">
+                                <Setter Property="BorderBrush" Value="{StaticResource BrushAccent}"/>
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </Border.Style>
                 <Grid>
                     <TextBlock x:Name="TxtPlaceholder" Text="Поиск по названию и описанию"
                                Foreground="{StaticResource BrushMuted}" FontSize="13"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
+                               HorizontalAlignment="Left" VerticalAlignment="Center"
+                               Margin="14,0,0,0"
                                IsHitTestVisible="False"/>
                     <TextBox x:Name="TxtFilter" Background="Transparent"
                              Foreground="{StaticResource BrushText}"
-                             BorderThickness="0" Padding="10,0"
+                             BorderThickness="0" Padding="14,0"
                              Height="36"
                              VerticalContentAlignment="Center"
-                             HorizontalContentAlignment="Center"
-                             TextAlignment="Center"
+                             HorizontalContentAlignment="Left"
+                             TextAlignment="Left"
                              CaretBrush="{StaticResource BrushAccent}">
                         <TextBox.Style>
                             <Style TargetType="TextBox">
                                 <Setter Property="Template">
                                     <Setter.Value>
                                         <ControlTemplate TargetType="TextBox">
-                                            <Border Background="Transparent" BorderThickness="0">
-                                                <ScrollViewer x:Name="PART_ContentHost" Margin="0"/>
+                                            <Border Background="Transparent" BorderThickness="0" Padding="{TemplateBinding Padding}">
+                                                <ScrollViewer x:Name="PART_ContentHost" Margin="0" VerticalAlignment="Center" HorizontalAlignment="Stretch"/>
                                             </Border>
                                         </ControlTemplate>
                                     </Setter.Value>
@@ -430,20 +472,14 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
 
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="180"/>
+                <ColumnDefinition Width="204"/>
                 <ColumnDefinition Width="14"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
             <StackPanel Grid.Column="0" x:Name="CategoryList"/>
 
-            <Border Grid.Column="2" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="6">
-                <Border.Background>
-                    <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
-                        <GradientStop Color="#2d1a22" Offset="0"/>
-                        <GradientStop Color="#2a1820" Offset="1"/>
-                    </LinearGradientBrush>
-                </Border.Background>
+            <Border Grid.Column="2" Background="{StaticResource BrushPanel}" BorderBrush="{StaticResource BrushBorder}" BorderThickness="1" CornerRadius="18">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="0">
                         <StackPanel x:Name="ToolList" Margin="12,12,12,12"/>
                 </ScrollViewer>
@@ -452,6 +488,7 @@ if (-not (Test-Path -LiteralPath $ToolsRoot)) { New-Item -Path $ToolsRoot -ItemT
 
         <TextBlock Grid.Row="3" x:Name="StatusText" Foreground="{StaticResource BrushMuted}" Margin="0,6,0,0" FontSize="11"/>
     </Grid>
+        <Rectangle x:Name="GrainLayer" Grid.RowSpan="2" IsHitTestVisible="False" Opacity="0.035"/>
     </Grid>
 </Window>
 "@
@@ -477,6 +514,100 @@ $TitleBar        = $Window.FindName('TitleBar')
 $BtnMinimize     = $Window.FindName('BtnMinimize')
 $BtnClose        = $Window.FindName('BtnClose')
 $RootGrid        = $Window.FindName('RootGrid')
+$GrainLayer      = $Window.FindName('GrainLayer')
+
+try {
+    $rnd = New-Object System.Random 7
+    $px = New-Object byte[] (128 * 128 * 4)
+    for ($i = 0; $i -lt 16384; $i++) {
+        $u1 = 1.0 - $rnd.NextDouble()
+        $u2 = $rnd.NextDouble()
+        $g = [math]::Sqrt(-2.0 * [math]::Log($u1)) * [math]::Cos(2.0 * [math]::PI * $u2)
+        $v = [int][math]::Round(128 + 48 * $g)
+        if ($v -lt 0) { $v = 0 } elseif ($v -gt 255) { $v = 255 }
+        $o = $i * 4
+        $px[$o] = [byte]$v
+        $px[$o + 1] = [byte]$v
+        $px[$o + 2] = [byte]$v
+        $px[$o + 3] = 255
+    }
+    $wb = New-Object System.Windows.Media.Imaging.WriteableBitmap(128, 128, 96, 96, [System.Windows.Media.PixelFormats]::Bgra32, $null)
+    $wb.WritePixels([System.Windows.Int32Rect]::new(0, 0, 128, 128), $px, 512, 0)
+    $wb.Freeze()
+    $grain = New-Object System.Windows.Media.ImageBrush $wb
+    $grain.TileMode = [System.Windows.Media.TileMode]::Tile
+    $grain.ViewportUnits = [System.Windows.Media.BrushMappingMode]::Absolute
+    $grain.Viewport = [System.Windows.Rect]::new(0, 0, 128, 128)
+    $grain.Stretch = [System.Windows.Media.Stretch]::None
+    $GrainLayer.Fill = $grain
+} catch { }
+
+function Start-BgAnimation {
+    if (-not $script:AnimEnabled) { return }
+    if ([System.Windows.Media.RenderCapability]::Tier -lt 0x00020000) { return }
+    $script:BgAnims = New-Object System.Collections.ArrayList
+    $ns = 'System.Windows.Media.Animation'
+    $forever = [System.Windows.Media.Animation.RepeatBehavior]::Forever
+    $specs = @(
+        @{ N = 1; Cx = 0.12; Cy = -0.08; Dur = 26; Ph = 0.00; CDur = 14; Rgb = @(@(247,184,210), @(244,154,192)); Alpha = @(38, 21, 7);  Op = 11 },
+        @{ N = 2; Cx = 1.00; Cy = 0.30;  Dur = 31; Ph = 0.37; CDur = 17; Rgb = @(@(247,184,210), @(255,214,230)); Alpha = @(24, 13, 4);  Op = 13 },
+        @{ N = 3; Cx = 0.30; Cy = 1.12;  Dur = 23; Ph = 0.61; CDur = 19; Rgb = @(@(244,154,192), @(247,184,210)); Alpha = @(29, 16, 5);  Op = 16 },
+        @{ N = 4; Cx = 0.70; Cy = 0.00;  Dur = 37; Ph = 0.23; CDur = 21; Rgb = @(@(255,226,206), @(247,184,210)); Alpha = @(10, 6, 2);   Op = 14 }
+    )
+    foreach ($sp in $specs) {
+        $brush = $Window.FindName("BrushGlow$($sp.N)")
+        $rect = $Window.FindName("Glow$($sp.N)")
+        if (-not $brush -or -not $rect) { continue }
+
+        $move = New-Object System.Windows.Media.Animation.PointAnimation
+        $move.From = [System.Windows.Point]::new($sp.Cx - 0.07, $sp.Cy - 0.06)
+        $move.To = [System.Windows.Point]::new($sp.Cx + 0.07, $sp.Cy + 0.06)
+        $move.Duration = [TimeSpan]::FromSeconds($sp.Dur)
+        $move.BeginTime = [TimeSpan]::FromSeconds(-1 * $sp.Dur * $sp.Ph)
+        $move.AutoReverse = $true
+        $move.RepeatBehavior = $forever
+        $ease = New-Object System.Windows.Media.Animation.SineEase
+        $ease.EasingMode = [System.Windows.Media.Animation.EasingMode]::EaseInOut
+        $move.EasingFunction = $ease
+        [System.Windows.Media.Animation.Timeline]::SetDesiredFrameRate($move, [Nullable[int]]20)
+        $moveOrigin = $move.Clone()
+        [System.Windows.Media.Animation.Timeline]::SetDesiredFrameRate($moveOrigin, [Nullable[int]]20)
+        $brush.BeginAnimation([System.Windows.Media.RadialGradientBrush]::CenterProperty, $move)
+        $brush.BeginAnimation([System.Windows.Media.RadialGradientBrush]::GradientOriginProperty, $moveOrigin)
+        $script:BgAnims.Add($move) | Out-Null
+        $script:BgAnims.Add($moveOrigin) | Out-Null
+
+        for ($k = 0; $k -lt 3; $k++) {
+            $col = New-Object System.Windows.Media.Animation.ColorAnimation
+            $c1 = $sp.Rgb[0]
+            $c2 = $sp.Rgb[1]
+            $col.From = [System.Windows.Media.Color]::FromArgb([byte]$sp.Alpha[$k], [byte]$c1[0], [byte]$c1[1], [byte]$c1[2])
+            $col.To = [System.Windows.Media.Color]::FromArgb([byte]$sp.Alpha[$k], [byte]$c2[0], [byte]$c2[1], [byte]$c2[2])
+            $col.Duration = [TimeSpan]::FromSeconds($sp.CDur)
+            $col.AutoReverse = $true
+            $col.RepeatBehavior = $forever
+            $cease = New-Object System.Windows.Media.Animation.SineEase
+            $cease.EasingMode = [System.Windows.Media.Animation.EasingMode]::EaseInOut
+            $col.EasingFunction = $cease
+            [System.Windows.Media.Animation.Timeline]::SetDesiredFrameRate($col, [Nullable[int]]20)
+            $brush.GradientStops[$k].BeginAnimation([System.Windows.Media.GradientStop]::ColorProperty, $col)
+            $script:BgAnims.Add($col) | Out-Null
+        }
+
+        $breath = New-Object System.Windows.Media.Animation.DoubleAnimation
+        $breath.From = 0.75
+        $breath.To = 1.0
+        $breath.Duration = [TimeSpan]::FromSeconds($sp.Op)
+        $breath.AutoReverse = $true
+        $breath.RepeatBehavior = $forever
+        $bease = New-Object System.Windows.Media.Animation.SineEase
+        $bease.EasingMode = [System.Windows.Media.Animation.EasingMode]::EaseInOut
+        $breath.EasingFunction = $bease
+        [System.Windows.Media.Animation.Timeline]::SetDesiredFrameRate($breath, [Nullable[int]]20)
+        $rect.BeginAnimation([System.Windows.UIElement]::OpacityProperty, $breath)
+        $script:BgAnims.Add($breath) | Out-Null
+    }
+}
 
 $Window.Add_Loaded({
     if (-not $script:AnimEnabled) { return }
@@ -488,6 +619,7 @@ $Window.Add_Loaded({
         $fade.EasingFunction = New-Object System.Windows.Media.Animation.QuadraticEase
         $RootGrid.BeginAnimation([System.Windows.UIElement]::OpacityProperty, $fade)
     } catch { }
+    try { Start-BgAnimation } catch { }
 })
 
 try {
@@ -657,7 +789,7 @@ $Categories = @(
     @{ Key = 'orbdiff';       Label = 'OrbDiff' }
     @{ Key = 'spokwn';        Label = 'Spokwn' }
     @{ Key = 'tonynoh';       Label = 'Tonynoh (для долбоебов)' }
-    @{ Key = 'detectac';      Label = 'DetectAC' }
+    @{ Key = 'detectac';      Label = 'DetectAC (для долбоебов)' }
     @{ Key = 'vortex';        Label = 'Vortex' }
     @{ Key = 'scripts';       Label = 'Scripts' }
     @{ Key = 'nirsoft';       Label = 'NirSoft' }
@@ -668,13 +800,12 @@ $Categories = @(
 $Tools = @(
     # ---------- Y Tools ----------
     # github.com/sweetvata, всё что начинается на Y-
-    @{ Name='Y-Check';    Description='Проверка всех .jar файлов';        Category='ytools'; Kind='Download'; Links=@('https://github.com/sweetvata/Y-Check/releases/download/v2.2/Y-check.exe') }
-    @{ Name='Y-Alts';     Description='Чекер альт-аккаунтов';             Category='ytools'; Kind='Download'; Links=@('https://github.com/sweetvata/Y-Alts/releases/download/v1.0/Y-Alts.exe') }
+    @{ Name='Y-Check';    Description='Проверка всех .jar файлов';        Category='ytools'; Kind='Download'; Links=@('https://github.com/sweetvata/Y-Check/releases/latest/download/Y-check.exe') }
+    @{ Name='Y-Alts';     Description='Чекер альт-аккаунтов';             Category='ytools'; Kind='Script'; Url='https://raw.githubusercontent.com/sweetvata/Y-Alts/main/Y-Alts.ps1' }
     @{ Name='Y-Jdump';    Description='Дампер';                           Category='ytools'; Kind='Script'; Url='https://raw.githubusercontent.com/sweetvata/Y-Jdump/main/Y-Jdump.ps1' }
     @{ Name='Y-ClipBoard';          Description='Просмотр истории буфера обмена';           Category='ytools'; Kind='Script'; Url='https://github.com/sweetvata/Y-ClipBoard/releases/download/Y-ClipBoard_1.0/Y-ClipBoard.ps1' }
     @{ Name='Y-SysInfo';            Description='Сбор информации о системе';                Category='ytools'; Kind='Script'; Url='https://raw.githubusercontent.com/sweetvata/Y-sysinfo/main/check.ps1' }
     # сам складывает выгрузку в Рабочий стол\papa - совпадает с $ToolsRoot
-    @{ Name='Y-PSOperational';      Description='Разбор событий 4104 из журнала PowerShell/Operational'; Category='ytools'; Kind='Script'; Url='https://raw.githubusercontent.com/sweetvata/Y-PSOperational/main/hunt-ps4104.ps1' }
     # Y-BOssTools (InjGen++) убран 11.08.2026: файл удалён из репозитория
     # sweetvata/Y-BOssTools коммитом f004ba3, релизов там нет, качать нечего
 
@@ -815,8 +946,6 @@ $Tools = @(
     @{ Name='System Informer Canary'; Description='Просмотр процессов и прочего, canary-сборка'; Category='others'; Kind='Download'; Links=@('https://github.com/winsiderss/si-builds/releases/download/4.0.26255.346/systeminformer-build-canary-setup.exe') }
     @{ Name='Everything 1.5a';        Description='Мгновенный поиск файлов по имени, ветка 1.5 (сборка 1.5.0.1423b)'; Category='others'; Kind='Download'; Links=@('https://www.voidtools.com/Everything-1.5.0.1423b.x64-Setup.exe') }
     @{ Name='P1AE Javaw';             Description='Сканер javaw';                          Category='others'; Kind='Download'; Links=@('https://github.com/p1aegg/javaw/releases/download/v1.9/P1AE.Javaw.exe') }
-    @{ Name='Jarabel';                Description='Находит .jar файлы на компьютере';      Category='others'; Kind='Download'; Links=@('https://github.com/nay-cat/Jarabel/releases/download/light/Jarabel.Light.exe') }
-    @{ Name='Luyten';                 Description='Java-декомпилятор с GUI для Procyon';   Category='others'; Kind='Download'; Links=@('https://github.com/deathmarine/Luyten/releases/download/v0.5.4_Rebuilt_with_Latest_depenencies/luyten-0.5.4.exe') }
     @{ Name='VM Aware';               Description='Детект виртуальных машин';              Category='others'; Kind='Download'; Links=@('https://github.com/NotRequiem/VMAware/releases/download/v2.8.0/vmaware.exe') }
     @{ Name='NTFS Parser';            Description='Форензик-инструмент для NTFS';          Category='others'; Kind='Download'; Links=@('https://github.com/thewhiteninja/ntfstool/releases/download/v1.7/ntfstool.x64.exe') }
     @{ Name='Hayabusa';               Description='Быстрый генератор форензик-таймлайна';  Category='others'; Kind='Download'; Links=@('https://github.com/Yamato-Security/hayabusa/releases/download/v3.10.0/hayabusa-3.10.0-all-platforms.zip') }
@@ -841,29 +970,29 @@ $Tools = @(
 # Script отдельным цветом не для красоты: он выполняет чужой код с гитхаба от админа,
 # это должно быть видно до нажатия, а не после
 $KindBadge = @{
-    'Download' = @{ Text = 'СКАЧАТЬ'; Color = '#c85a82' }
-    'Script'   = @{ Text = 'СКРИПТ';  Color = '#c8703a' }
-    'Inline'   = @{ Text = 'КОМАНДА'; Color = '#8a5a9a' }
-    'Link'     = @{ Text = 'ССЫЛКА';  Color = '#5a8a9a' }
+    'Download' = @{ Text = 'СКАЧАТЬ'; Color = '#f7b8d2'; Fill = '#26f7b8d2' }
+    'Script'   = @{ Text = 'СКРИПТ';  Color = '#f0d8a8'; Fill = '#26f0d8a8' }
+    'Inline'   = @{ Text = 'КОМАНДА'; Color = '#c8b0f0'; Fill = '#26c8b0f0' }
+    'Link'     = @{ Text = 'ССЫЛКА';  Color = '#a8d8f0'; Fill = '#26a8d8f0' }
 }
 
 function New-KindBadge {
     param([string]$Kind)
     $spec = $KindBadge[$Kind]
-    if (-not $spec) { $spec = @{ Text = $Kind.ToUpper(); Color = '#8a6878' } }
+    if (-not $spec) { $spec = @{ Text = $Kind.ToUpper(); Color = '#6af3eef1'; Fill = '#14ffffff' } }
     $b = New-Object System.Windows.Controls.Border
     $b.CornerRadius = '3'
     $b.Padding = '5,1,5,1'
     $b.Margin = '0,0,6,0'
     $b.VerticalAlignment = 'Center'
     $bg = New-Object System.Windows.Media.SolidColorBrush
-    $bg.Color = [System.Windows.Media.ColorConverter]::ConvertFromString($spec.Color)
+    $bg.Color = [System.Windows.Media.ColorConverter]::ConvertFromString($spec.Fill)
     $b.Background = $bg
     $t = New-Object System.Windows.Controls.TextBlock
     $t.Text = $spec.Text
     $t.FontSize = 9
     $t.FontWeight = 'Bold'
-    $t.Foreground = $Window.FindResource('BrushText')
+    $t.Foreground = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.ColorConverter]::ConvertFromString($spec.Color))
     $b.Child = $t
     return $b
 }
@@ -891,15 +1020,15 @@ function Update-ToolList {
     foreach ($tool in $items) {
         $card = New-Object System.Windows.Controls.Border
         $cardEdge = New-Object System.Windows.Media.SolidColorBrush
-        $cardEdge.Color = [System.Windows.Media.ColorConverter]::ConvertFromString('#52304a')
+        $cardEdge.Color = [System.Windows.Media.ColorConverter]::ConvertFromString('#14ffffff')
         $card.BorderBrush = $cardEdge
         $card.BorderThickness = '1'
-        $card.CornerRadius = '6'
+        $card.CornerRadius = '12'
         $card.Padding = '12,10,12,10'
         $card.Margin = '0,0,0,12'
         # фон карточки чуть темнее панели чтобы не сливались
         $cardBg = New-Object System.Windows.Media.SolidColorBrush
-        $cardBg.Color = [System.Windows.Media.ColorConverter]::ConvertFromString('#3a2030')
+        $cardBg.Color = [System.Windows.Media.ColorConverter]::ConvertFromString('#0cffffff')
         $card.Background = $cardBg
 
         $grid = New-Object System.Windows.Controls.Grid
@@ -911,8 +1040,8 @@ function Update-ToolList {
         $grid.ColumnDefinitions.Add($col2)
 
         # подсветка карточки под курсором
-        $card.Add_MouseEnter({ param($s, $e) Set-BrushColor -Brush $s.BorderBrush -Hex '#c85a82' })
-        $card.Add_MouseLeave({ param($s, $e) Set-BrushColor -Brush $s.BorderBrush -Hex '#52304a' })
+        $card.Add_MouseEnter({ param($s, $e) Set-BrushColor -Brush $s.BorderBrush -Hex '#24ffffff'; Set-BrushColor -Brush $s.Background -Hex '#13ffffff' })
+        $card.Add_MouseLeave({ param($s, $e) Set-BrushColor -Brush $s.BorderBrush -Hex '#14ffffff'; Set-BrushColor -Brush $s.Background -Hex '#0cffffff' })
 
         $textStack = New-Object System.Windows.Controls.StackPanel
         $textStack.VerticalAlignment = 'Center'
@@ -1030,7 +1159,6 @@ foreach ($cat in $Categories) {
     $inner.ColumnDefinitions.Add($c2)
     $lbl = New-Object System.Windows.Controls.TextBlock
     $lbl.Text = $cat.Label
-    # длинные подписи ('Tonynoh (для долбоебов)') переносим, колонка 180 их не вмещает
     $lbl.TextWrapping = 'Wrap'
     $lbl.VerticalAlignment = 'Center'
     $num = New-Object System.Windows.Controls.TextBlock
