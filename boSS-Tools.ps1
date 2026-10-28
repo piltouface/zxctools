@@ -950,6 +950,7 @@ $Tools = @(
     @{ Name='NTFS Parser';            Description='Форензик-инструмент для NTFS';          Category='others'; Kind='Download'; Links=@('https://github.com/thewhiteninja/ntfstool/releases/download/v1.7/ntfstool.x64.exe') }
     @{ Name='Hayabusa';               Description='Быстрый генератор форензик-таймлайна';  Category='others'; Kind='Download'; Links=@('https://github.com/Yamato-Security/hayabusa/releases/download/v3.10.0/hayabusa-3.10.0-all-platforms.zip') }
     @{ Name='HxD';                    Description='Hex-редактор';                          Category='others'; Kind='Download'; Links=@('https://mh-nexus.de/downloads/HxDSetup.zip') }
+    @{ Name='Bytecode Viewer';        Description='Декомпилятор и просмотр байткода Java (jar, class)'; Category='others'; Kind='Download'; Links=@('https://github.com/Konloch/bytecode-viewer/releases/download/v2.13.2/Bytecode-Viewer-2.13.2.jar') }
     @{ Name='DIE Engine';             Description='Определяет тип файла, пакер, компилятор';Category='others'; Kind='Link';    Url='https://github.com/horsicq/DIE-engine/releases' }
     @{ Name='Velociraptor';           Description='DFIR и threat hunting на эндпоинтах';   Category='others'; Kind='Link';     Url='https://github.com/Velocidex/velociraptor/releases/latest' }
     @{ Name='Macro Scanner (Lafferr)';Description='Сканер макросов от Lafferr';            Category='others'; Kind='Download'; Links=@('https://github.com/Lafferrr/MacroScanner/releases/download/MAW/MacroScanner.exe') }
